@@ -33,8 +33,8 @@ int main(int argc, char* argv[]) {
     eigen_maj eigSolver;                            // define
     eigSolver.init(matrix_sz);                      // initialize
 
-    laplacian3D(eigSolver, mx, my, mz);             // set matrix A: use eigSolver.setA(row, col, val) to set values.
-    laplacian3D_randomized(eigSolver, mx, my, mz);  // set matrix B: use eigSolver.setB(row, col, val) to set values.
+    laplacian3D(eigSolver, mx, my, mz);             // set matrix A: an example how to use eigSolver.setA(row, col, val) to set values.
+    laplacian3D_randomized(eigSolver, mx, my, mz);  // set matrix B: an example how to use eigSolver.setB(row, col, val) to set values.
     eigSolver.assemble();                           // assemble
 //    eigSolver.viewA();                            // view matrix A
 //    eigSolver.viewB();                            // view matrix B
