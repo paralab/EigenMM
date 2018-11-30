@@ -10,6 +10,12 @@ Also, to use the view functions "x" option should be passed to PETSc.\
 To do that, when installing PETSc pass the following parameters:\
 ./configure --with-cxx-dialect=C++11 --download-mumps  --with-x
 
+---
+
+To see an example, check main.cpp.
+
+---
+
 solve() function computes the eigenvalues and eigenvectors.\
 solve(int nev, int ncv, int mpd, bool verbose):\
 **nev**: number of eigenvalues requested.\
@@ -23,3 +29,5 @@ solve(int nev, int ncv, int mpd, bool verbose):\
  If nev is not too large, mpd=nev is a reasonable choice, otherwise a smaller value should be used.
  
  If solve() is called without passing aany argument, it will compute **all** the eigenvalues, without printing any information. And, ncv = 2 * nev and mpd = nev.
+
+---
