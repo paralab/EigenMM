@@ -22,4 +22,4 @@ solve(int nev, int ncv, int mpd, bool verbose):\
  The value of ncv should always be between nev and (nev+mpd), typically ncv=nev+mpd.\
  If nev is not too large, mpd=nev is a reasonable choice, otherwise a smaller value should be used.\
  
- 
+ If solve() is called without passing aany argument, it will compute **all** the eigenvalues, without printing any information. And, ncv = 2 * nev and mpd = nev.
