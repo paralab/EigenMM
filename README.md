@@ -13,7 +13,7 @@ To do that, when installing PETSc pass the following parameters:\
 solve() function computes the eigenvalues and eigenvectors.\
 solve(int nev, int ncv, int mpd, bool verbose):\
 nev: number of eigenvalues requested.\
-verbose: pass "true" to print information.
+verbose: pass "true" to print information.\
 ncv and mpd: From SLEPc documentation:\
 
  The parameters ncv and mpd are intimately related, so that the user is advised to set one of them at most.\
