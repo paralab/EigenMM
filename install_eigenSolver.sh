@@ -8,3 +8,5 @@ cd slepc-3.8.3
 export SLEPC_DIR=`pwd`
 #./configure
 #make
+echo "copy the following line inside CMakeLists.txt after the line that reads: paste the SLEPC_DIR address here:"
+echo "set(SLEPC_DIR `pwd`)"

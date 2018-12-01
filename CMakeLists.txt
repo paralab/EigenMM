@@ -17,17 +17,20 @@ include_directories(${MPI_INCLUDE_PATH})
 set(PETSC_LIB ${PETSC_DIR}/${PETSC_ARCH}/lib/libpetsc.so)
 include_directories(
         ${PETSC_DIR}/include
-        ${PETSC_DIR}/arch-linux2-c-debug/include
+        ${PETSC_DIR}/${PETSC_ARCH}/include
 )
 
 # -----------------------------------------------------------------------
 # SLEPc
 
+# paste the SLEPC_DIR address here:
+
+
 #set(SLEPC_DIR "~/softwares/slepc-3.8.3")
 set(SLEPC_LIB ${SLEPC_DIR}/${PETSC_ARCH}/lib/libslepc.so)
 include_directories(
         ${SLEPC_DIR}/include
-        ${SLEPC_DIR}/arch-linux2-c-debug/include
+        ${SLEPC_DIR}/${PETSC_ARCH}/include
 )
 
 # -----------------------------------------------------------------------
