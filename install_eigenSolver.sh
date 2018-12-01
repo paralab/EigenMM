@@ -10,4 +10,4 @@ export SLEPC_DIR=`pwd`
 make
 
 printf "\ncopy the following line inside CMakeLists.txt after the line that reads: paste the SLEPC_DIR address here:"
-printf "set(SLEPC_DIR `pwd`)\n"
+printf "\nset(SLEPC_DIR `pwd`)\n"
