@@ -6,4 +6,5 @@ module load petsc/3.8.3
 tar -xzf slepc-3.8.3.tar.gz
 cd slepc-3.8.3
 export SLEPC_DIR='pwd'
-make
+#./configure
+#make
