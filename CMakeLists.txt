@@ -36,20 +36,4 @@ include_directories(
 # -----------------------------------------------------------------------
 
 add_executable(slepc006 main.cpp eigen_maj.h)
-
-# -----------------------------------------------------------------------
-# MPI - part 2/2
-
-if(MPI_COMPILE_FLAGS)
-    set_target_properties(slepc006 PROPERTIES
-            COMPILE_FLAGS "${MPI_COMPILE_FLAGS}")
-endif()
-
-if(MPI_LINK_FLAGS)
-    set_target_properties(slepc006 PROPERTIES
-            LINK_FLAGS "${MPI_LINK_FLAGS}")
-endif()
-
-# -----------------------------------------------------------------------
-
 target_link_libraries(slepc006 ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
