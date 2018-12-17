@@ -4,7 +4,7 @@ project(slepc006)
 set(CMAKE_CXX_STANDARD 11)
 
 # -----------------------------------------------------------------------
-# MPI - part 1/2
+# MPI
 
 find_package(MPI REQUIRED)
 include_directories(${MPI_INCLUDE_PATH})
