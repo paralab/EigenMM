@@ -21,8 +21,8 @@ int main(int argc, char* argv[]) {
     MPI_Comm_rank(comm, &rank);
 
     if(rank == 0){
-        printf("\nUsage:   mpirun -np <#procs> ./slepc006 <x-axis size> <y-axis size> <z-axis size> \n");
-        printf("example: mpirun -np 4 ./slepc006 8 9 7 \n\n");
+        printf("\nUsage:   mpirun -np <#procs> ./eigenSolver <x-axis size> <y-axis size> <z-axis size> \n");
+        printf("example: mpirun -np 3 ./eigenSolver 3 3 3 \n\n");
     }
 
     int mx(std::stoi(argv[1]));

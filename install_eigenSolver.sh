@@ -3,7 +3,11 @@
 module load mumps/5.0.2
 module load petsc/3.8.3
 
-tar -xzf slepc-3.8.3.tar.gz
+export PETSC_ARCH=
+
+if [ ! -d "slepc-3.8.3" ]; then
+    tar -xzf slepc-3.8.3.tar.gz
+fi
 cd slepc-3.8.3
 export SLEPC_DIR=`pwd`
 ./configure

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.04)
-project(slepc006)
+project(eigenSolver)
 
 set(CMAKE_CXX_STANDARD 11)
 
@@ -35,5 +35,5 @@ include_directories(
 
 # -----------------------------------------------------------------------
 
-add_executable(slepc006 main.cpp eigen_maj.h)
-target_link_libraries(slepc006 ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
+add_executable(eigenSolver main.cpp eigen_maj.h)
+target_link_libraries(eigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
