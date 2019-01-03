@@ -10,6 +10,7 @@ typedef double value_t;
 
 int laplacian3D(eigen_maj &eigSolver, int mx, int my, int mz);
 int laplacian3D_randomized(eigen_maj &eigSolver, int mx, int my, int mz);
+double print_time(double t_start, double t_end, std::string function_name, MPI_Comm comm);
 
 int main(int argc, char* argv[]) {
 
@@ -31,15 +32,23 @@ int main(int argc, char* argv[]) {
     auto matrix_sz = unsigned(mx * my * mz);
 
     eigen_maj eigSolver;                            // define
-    eigSolver.init(matrix_sz);                      // initialize
+    eigSolver.init(matrix_sz);                      // initialize. matrix_sz: matrix size (number of rows)
 
     laplacian3D(eigSolver, mx, my, mz);             // set matrix A: an example how to use eigSolver.setA(row, col, val) to set values.
     laplacian3D_randomized(eigSolver, mx, my, mz);  // set matrix B: an example how to use eigSolver.setB(row, col, val) to set values.
+
+    double t1 = MPI_Wtime();
     eigSolver.assemble();                           // assemble
+    double t2 = MPI_Wtime();
+    print_time(t1, t2, "assemble", comm);
+
 //    eigSolver.viewA();                            // view matrix A
 //    eigSolver.viewB();                            // view matrix B
 
+    t1 = MPI_Wtime();
     eigSolver.solve();                              // find eigenvalues and eigenvectors
+    t2 = MPI_Wtime();
+    print_time(t1, t2, "solve", comm);
 
 //    eigSolver.print_eig_val();                    // print eigenvalues (complex form)
 //    eigSolver.print_eig_val_real();               // print eigenvalues (real part)
@@ -54,18 +63,21 @@ int main(int argc, char* argv[]) {
     // ----------------------------------------------------------
     int eig_num = eigSolver.get_eig_num();
 
-    double *eig_val_real;
-    eig_val_real = eigSolver.get_eig_val_real();
-    double *eig_val_imag;
-    eig_val_imag = eigSolver.get_eig_val_imag();
+    double *eig_val_real = eigSolver.get_eig_val_real();
+//    eig_val_real = eigSolver.get_eig_val_real();
+    double *eig_val_imag = eigSolver.get_eig_val_imag();
+//    eig_val_imag = eigSolver.get_eig_val_imag();
 
-    if(rank == 0) {
+    MPI_Barrier(comm);
+    if(rank == nprocs-1) {
         printf("\neigenvalues on processor %d: \n", rank);
         for (int i = 0; i < eig_num; i++) {
             printf("%d \t %f + %f i\n", i, eig_val_real[i], eig_val_imag[i]);
         }
     }
+    MPI_Barrier(comm);
 
+/*
     int eig_vec_i = 1;
     double *eig_vec_i_real;
     eig_vec_i_real = eigSolver.get_eig_vec_real(1);
@@ -78,6 +90,7 @@ int main(int argc, char* argv[]) {
             printf("%d \t %f + %f i\n", i, eig_vec_i_real[i], eig_vec_i_imag[i]);
         }
     }
+*/
 
     return 0;
 }
@@ -308,4 +321,25 @@ int laplacian3D_randomized(eigen_maj &eigSolver, int mx, int my, int mz){
     }
 
     return 0;
+}
+
+
+double print_time(double t_start, double t_end, std::string function_name, MPI_Comm comm){
+
+    int rank, nprocs;
+    MPI_Comm_rank(comm, &rank);
+    MPI_Comm_size(comm, &nprocs);
+
+    double min, max, average;
+    double t_dif = t_end - t_start;
+
+    MPI_Reduce(&t_dif, &min, 1, MPI_DOUBLE, MPI_MIN, 0, comm);
+    MPI_Reduce(&t_dif, &max, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
+    MPI_Reduce(&t_dif, &average, 1, MPI_DOUBLE, MPI_SUM, 0, comm);
+    average /= nprocs;
+
+    if (rank==0)
+        std::cout << std::endl << function_name << "\nmin: " << min << "\nave: " << average << "\nmax: " << max << std::endl << std::endl;
+
+    return average;
 }
