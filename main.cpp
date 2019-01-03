@@ -62,7 +62,9 @@ int main(int argc, char* argv[]) {
     // this part shows how to access eigenvalues and eigenvectors
     // ----------------------------------------------------------
     int eig_num = eigSolver.get_eig_num();
+    if(rank==0) printf("number of eigenvalues computed: %u\n", eig_num);
 
+    /*
     double *eig_val_real = eigSolver.get_eig_val_real();
 //    eig_val_real = eigSolver.get_eig_val_real();
     double *eig_val_imag = eigSolver.get_eig_val_imag();
@@ -77,7 +79,6 @@ int main(int argc, char* argv[]) {
     }
     MPI_Barrier(comm);
 
-/*
     int eig_vec_i = 1;
     double *eig_vec_i_real;
     eig_vec_i_real = eigSolver.get_eig_vec_real(1);
