@@ -358,7 +358,7 @@ public:
 
         PetscReal threshold = 0.2 * mat_size;
 
-        PetscReal inta = 0;
+        PetscReal inta = 0.1;
         PetscReal intb = 0.2;
         PetscReal interval_step = intb - inta;
         PetscReal start_interval = inta;
