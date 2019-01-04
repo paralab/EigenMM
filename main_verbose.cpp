@@ -69,8 +69,10 @@ int main(int argc, char* argv[]) {
     int mpd(std::stoi(argv[2]));
 //    int ncv(std::stoi(argv[3]));
     int ncv = nev + mpd;
+    if(rank==0) printf("size = %d, nev = %d, ncv = %d, mpd = %d\n", matrix_sz, nev, ncv, mpd);
 
-    eigSolver.solve(nev, ncv, mpd, false);                              // find eigenvalues and eigenvectors
+//    eigSolver.solve();                              // find eigenvalues and eigenvectors
+    eigSolver.solve(nev, ncv, mpd, false);          // find eigenvalues and eigenvectors
 
 #ifdef _DEBUG1_
     t2 = MPI_Wtime();
