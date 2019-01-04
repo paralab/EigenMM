@@ -11,6 +11,7 @@
 #include <iostream>
 #include "mpi.h"
 
+#define _DEBUG1_
 
 template<class T>
 int print_vector(const std::vector<T> &v, const int ran, const std::string &name, MPI_Comm comm){
@@ -290,7 +291,7 @@ public:
         EPSType        type;
         PetscReal      tol;
         Vec            xr, xi, *Iv, *Cv;
-        PetscInt       maxit, i, its, lits, nconv, nini=0, ncon=0;
+        PetscInt       maxit, i, its, lits, nconv, total_nconv, nini=0, ncon=0;
         PetscViewer    viewer;
         PetscBool      ishermitian;
         PetscErrorCode ierr;
@@ -299,7 +300,7 @@ public:
 //        bool verbose1 = verbose;
 //        bool verbose2 = verbose;
 
-        bool verbose1 = true;
+        bool verbose1 = false;
         bool verbose2 = false;
 
         // set command-line parameters here
@@ -346,12 +347,6 @@ public:
 //        ierr = EPSSetInitialSpace(eps,nini,Iv);CHKERRQ(ierr);
 //        ierr = EPSSetDeflationSpace(eps,ncon,Cv);CHKERRQ(ierr);
 
-        // Set the interval and other settings for spectrum slicing
-
-        PetscReal inta = 1.1;
-        PetscReal intb = 1.2;
-        ierr = EPSSetInterval(eps,inta,intb);CHKERRQ(ierr);
-
         ierr = EPSSetWhichEigenpairs(eps,EPS_ALL);CHKERRQ(ierr);
         ierr = EPSGetST(eps,&st);CHKERRQ(ierr);
         ierr = STSetType(st,STSINVERT);CHKERRQ(ierr);
@@ -391,39 +386,57 @@ public:
         //                    Solve the eigensystem
         //   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-        ierr = EPSSolve(eps);CHKERRQ(ierr);
+        total_nconv = 0; // total number of eigenvalues found.
+        PetscReal threshold = 0.2 * mat_size;
 
+        PetscReal inta = 0;
+        PetscReal intb = 0.2;
+        PetscReal interval_step = intb - inta;
 
-        // Optional: Get some information from the solver and display it
+        while(total_nconv < threshold) {
+            // Set the interval and other settings for spectrum slicing
+            ierr = EPSSetInterval(eps, inta, intb); CHKERRQ(ierr);
 
-        if(verbose1){
-            ierr = EPSGetIterationNumber(eps,&its);CHKERRQ(ierr);
-            ierr = PetscPrintf(PETSC_COMM_WORLD," Number of iterations of the method: %D\n",its);CHKERRQ(ierr);
-            ierr = EPSGetST(eps,&st);CHKERRQ(ierr);
-            ierr = STGetKSP(st,&ksp);CHKERRQ(ierr);
-            ierr = KSPGetTotalIterations(ksp,&lits);CHKERRQ(ierr);
-            ierr = PetscPrintf(PETSC_COMM_WORLD," Number of linear iterations of the method: %D\n",lits);CHKERRQ(ierr);
-            ierr = EPSGetType(eps,&type);CHKERRQ(ierr);
-            ierr = PetscPrintf(PETSC_COMM_WORLD," Solution method: %s\n\n",type);CHKERRQ(ierr);
-            ierr = EPSGetDimensions(eps,&nev,NULL,NULL);CHKERRQ(ierr);
-            ierr = PetscPrintf(PETSC_COMM_WORLD," Number of requested eigenvalues: %D\n",nev);CHKERRQ(ierr);
-            ierr = EPSGetTolerances(eps,&tol,&maxit);CHKERRQ(ierr);
-            ierr = PetscPrintf(PETSC_COMM_WORLD," Stopping condition: tol=%.4g, maxit=%D\n",(double)tol,maxit);CHKERRQ(ierr);
-            ierr = EPSReasonView(eps,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+            ierr = EPSSolve(eps); CHKERRQ(ierr);
+
+            ierr = EPSGetConverged(eps,&nconv);CHKERRQ(ierr);
+            ierr = PetscPrintf(PETSC_COMM_WORLD," Number of eigenvalues found in [%.2f, %.2f]: %D\n", inta, intb ,nconv);CHKERRQ(ierr);
+
+#ifdef _DEBUG1_
+            // Optional: Get some information from the solver and display it
+            if(verbose1){
+                ierr = EPSGetIterationNumber(eps,&its);CHKERRQ(ierr);
+                ierr = PetscPrintf(PETSC_COMM_WORLD," Number of iterations of the method: %D\n",its);CHKERRQ(ierr);
+                ierr = EPSGetST(eps,&st);CHKERRQ(ierr);
+                ierr = STGetKSP(st,&ksp);CHKERRQ(ierr);
+                ierr = KSPGetTotalIterations(ksp,&lits);CHKERRQ(ierr);
+                ierr = PetscPrintf(PETSC_COMM_WORLD," Number of linear iterations of the method: %D\n",lits);CHKERRQ(ierr);
+                ierr = EPSGetType(eps,&type);CHKERRQ(ierr);
+                ierr = PetscPrintf(PETSC_COMM_WORLD," Solution method: %s\n\n",type);CHKERRQ(ierr);
+                ierr = EPSGetDimensions(eps,&nev,NULL,NULL);CHKERRQ(ierr);
+                ierr = PetscPrintf(PETSC_COMM_WORLD," Number of requested eigenvalues: %D\n",nev);CHKERRQ(ierr);
+                ierr = EPSGetTolerances(eps,&tol,&maxit);CHKERRQ(ierr);
+                ierr = PetscPrintf(PETSC_COMM_WORLD," Stopping condition: tol=%.4g, maxit=%D\n",(double)tol,maxit);CHKERRQ(ierr);
+                ierr = EPSReasonView(eps,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+            }
+
+            // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+            //                  Display solution and clean up
+            //   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+            // Show detailed info if verbose is true.
+
+            if(verbose2){
+                ierr = PetscViewerPushFormat(PETSC_VIEWER_STDOUT_WORLD,PETSC_VIEWER_ASCII_INFO_DETAIL);CHKERRQ(ierr);
+                ierr = EPSErrorView(eps,EPS_ERROR_RELATIVE,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+                ierr = PetscViewerPopFormat(PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
+            }
+#endif
+
+            inta += interval_step;
+            intb += interval_step;
+            total_nconv += nconv;
         }
-
-        // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-        //                  Display solution and clean up
-        //   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-        // Show detailed info if verbose is true.
-
-        if(verbose2){
-            ierr = PetscViewerPushFormat(PETSC_VIEWER_STDOUT_WORLD,PETSC_VIEWER_ASCII_INFO_DETAIL);CHKERRQ(ierr);
-            ierr = EPSErrorView(eps,EPS_ERROR_RELATIVE,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-            ierr = PetscViewerPopFormat(PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
-        }
-
 
         // store eigenvalues and eigenvectors in the class.
 
