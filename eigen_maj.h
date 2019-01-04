@@ -363,7 +363,7 @@ public:
         double *vec;
         int nlocal = 0;
 
-        store_eigenpairs = true; // set this to true to store eigenpairs in the wrapper class.
+//        store_eigenpairs = true; // set this to true to store eigenpairs in the wrapper class.
         if(store_eigenpairs) {
             // store eigenvalues and eigenvectors in the class.
             ierr = MatCreateVecs(A, nullptr, &xr);
