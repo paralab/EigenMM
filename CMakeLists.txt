@@ -45,3 +45,6 @@ include_directories(
 
 add_executable(eigenSolver main.cpp eigen_maj.h)
 target_link_libraries(eigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
+
+add_executable(veigenSolver main_verbose.cpp eigen_maj.h)
+target_link_libraries(veigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})

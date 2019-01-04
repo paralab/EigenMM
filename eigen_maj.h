@@ -132,6 +132,13 @@ public:
         PetscBool      ishermitian;
         PetscErrorCode ierr;
 
+        // default:
+//        bool verbose1 = verbose;
+//        bool verbose2 = verbose;
+
+        bool verbose1 = true;
+        bool verbose2 = false;
+
         //- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         //              Create the eigensolver and set various options
         //  - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -182,7 +189,7 @@ public:
 
         // Optional: Get some information from the solver and display it
 
-        if(verbose){
+        if(verbose1){
             ierr = EPSGetIterationNumber(eps,&its);CHKERRQ(ierr);
             ierr = PetscPrintf(PETSC_COMM_WORLD," Number of iterations of the method: %D\n",its);CHKERRQ(ierr);
             ierr = EPSGetST(eps,&st);CHKERRQ(ierr);
@@ -195,18 +202,17 @@ public:
             ierr = PetscPrintf(PETSC_COMM_WORLD," Number of requested eigenvalues: %D\n",nev);CHKERRQ(ierr);
             ierr = EPSGetTolerances(eps,&tol,&maxit);CHKERRQ(ierr);
             ierr = PetscPrintf(PETSC_COMM_WORLD," Stopping condition: tol=%.4g, maxit=%D\n",(double)tol,maxit);CHKERRQ(ierr);
+            ierr = EPSReasonView(eps,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
         }
 
         // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
         //                  Display solution and clean up
         //   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-
         // Show detailed info if verbose is true.
 
-        if(verbose){
+        if(verbose2){
             ierr = PetscViewerPushFormat(PETSC_VIEWER_STDOUT_WORLD,PETSC_VIEWER_ASCII_INFO_DETAIL);CHKERRQ(ierr);
-            ierr = EPSReasonView(eps,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
             ierr = EPSErrorView(eps,EPS_ERROR_RELATIVE,PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
             ierr = PetscViewerPopFormat(PETSC_VIEWER_STDOUT_WORLD);CHKERRQ(ierr);
         }
