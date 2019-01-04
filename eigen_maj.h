@@ -392,6 +392,7 @@ public:
         PetscReal inta = 0;
         PetscReal intb = 0.2;
         PetscReal interval_step = intb - inta;
+        PetscReal start_interval = inta;
 
         while(total_nconv < threshold) {
             // Set the interval and other settings for spectrum slicing
@@ -437,6 +438,9 @@ public:
             intb += interval_step;
             total_nconv += nconv;
         }
+
+        ierr = PetscPrintf(PETSC_COMM_WORLD," -------------------------------------------------------\n");CHKERRQ(ierr);
+        ierr = PetscPrintf(PETSC_COMM_WORLD," Total number of eigenvalues found in [%.2f, %.2f]: %D (%% %.2f)\n", start_interval, inta ,total_nconv, (float)100*total_nconv/mat_size);CHKERRQ(ierr);
 
         // store eigenvalues and eigenvectors in the class.
 

@@ -27,8 +27,10 @@ int main(int argc, char* argv[]) {
     MPI_Comm_rank(comm, &rank);
 
     if(rank == 0){
-        printf("\nUsage:   mpirun -np <#procs> ./eigenSolver <x-axis size> <y-axis size> <z-axis size> \n");
-        printf("example: mpirun -np 3 ./eigenSolver 3 3 3 \n\n");
+        printf("\nUsage:   mpirun -np <#procs> ./eigenSolver <axis_size> <mpd> \n");
+        printf("         the same axis_size is used for all x, y and z axes.\n");
+        printf("example: mpirun -np 2 ./eigenSolver 3 200 \n");
+        printf("-------------------------------------------------------------\n");
     }
 
     int mx(std::stoi(argv[1]));
@@ -69,7 +71,8 @@ int main(int argc, char* argv[]) {
     int mpd(std::stoi(argv[2]));
 //    int ncv(std::stoi(argv[3]));
     int ncv = nev + mpd;
-    if(rank==0) printf("size = %d, nev = %d, ncv = %d, mpd = %d\n", matrix_sz, nev, ncv, mpd);
+    if(rank==0) printf(" size = %d, nev = %d, ncv = %d, mpd = %d\n", matrix_sz, nev, ncv, mpd);
+    if(rank==0) printf(" ------------------------------------------------------\n");
 
     eigSolver.solve();                              // find eigenvalues and eigenvectors
 //    eigSolver.solve(nev, ncv, mpd, false);          // find eigenvalues and eigenvectors
