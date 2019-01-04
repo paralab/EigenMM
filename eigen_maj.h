@@ -337,8 +337,11 @@ public:
         // The value of ncv should always be between nev and (nev+mpd), typically ncv=nev+mpd.
         // If nev is not too large, mpd=nev is a reasonable choice, otherwise a smaller value should be used.
 
-        // ncv: number of column vectors (i.e., the dimension of the subspace with which the eigensolver works).
+        // ncv (number of column vectors): (i.e., the dimension of the subspace with which the eigensolver works).
         // This usually improves the convergence behavior at the expense of larger memory requirements.
+        // mpd (maximum projected dimension): (read about the steps on page 45 of the manual)
+        // The idea is to bound the size of the projected eigenproblem so that steps 3 and 4 work with a dimension
+        // of mpd at most, while steps 1 and 2 still work with a bigger dimension, up to ncv.
 
         if(nev == 0) nev = mat_size; // if nev is not set, request all eigenvalues.
         if(ncv == 0) ncv = 2 * nev;  // if ncv is not set, set it to default.

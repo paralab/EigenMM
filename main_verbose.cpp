@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
     int mpd(std::stoi(argv[2]));
 //    int ncv(std::stoi(argv[3]));
 //    int ncv = nev + mpd;
-    int ncv = int(0.2*nev) + mpd;
+    int ncv = int(0.3*nev);
 
     if(rank==0) printf(" size = %d, nev = %d, ncv = %d, mpd = %d\n", matrix_sz, nev, ncv, mpd);
     if(rank==0) printf(" ------------------------------------------------------\n");
