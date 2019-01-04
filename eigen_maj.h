@@ -151,6 +151,11 @@ public:
 
         ierr = EPSSetOperators(eps,A,B);CHKERRQ(ierr);
 //        ierr = EPSSetOperators(eps,A,NULL);CHKERRQ(ierr); // for standard
+        ierr = EPSSetProblemType(eps,EPS_HEP);CHKERRQ(ierr); // EPS_HEP: Hermitian eigenvalue problem.
+
+        double tol1 = 1e-8;
+        int max_iter = 1000;
+        EPSSetTolerances(eps,tol1, max_iter);
 
         // If the user provided initial guesses or constraints, pass them here
 
@@ -170,6 +175,9 @@ public:
         // and (b) in cases where nev is large, the user sets mpd.
         // The value of ncv should always be between nev and (nev+mpd), typically ncv=nev+mpd.
         // If nev is not too large, mpd=nev is a reasonable choice, otherwise a smaller value should be used.
+
+        // ncv: number of column vectors (i.e., the dimension of the subspace with which the eigensolver works).
+        // This usually improves the convergence behavior at the expense of larger memory requirements.
 
         if(nev == 0) nev = mat_size; // if nev is not set, request all eigenvalues.
         if(ncv == 0) ncv = 2 * nev;  // if ncv is not set, set it to default.

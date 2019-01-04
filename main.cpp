@@ -12,6 +12,9 @@ typedef double value_t;
 int laplacian3D(eigen_maj &eigSolver, int mx, int my, int mz);
 int laplacian3D_randomized(eigen_maj &eigSolver, int mx, int my, int mz);
 
+#undef __FUNCT__
+#define __FUNCT__ "main"
+
 int main(int argc, char* argv[]) {
 
     MPI_Init(&argc, &argv);

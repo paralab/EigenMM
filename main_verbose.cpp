@@ -14,6 +14,9 @@ int laplacian3D(eigen_maj &eigSolver, int mx, int my, int mz);
 int laplacian3D_randomized(eigen_maj &eigSolver, int mx, int my, int mz);
 double print_time(double t_start, double t_end, std::string function_name, MPI_Comm comm);
 
+#undef __FUNCT__
+#define __FUNCT__ "main"
+
 int main(int argc, char* argv[]) {
 
     MPI_Init(&argc, &argv);
