@@ -151,7 +151,10 @@ public:
 
         ierr = EPSSetOperators(eps,A,B);CHKERRQ(ierr);
 //        ierr = EPSSetOperators(eps,A,NULL);CHKERRQ(ierr); // for standard
-        ierr = EPSSetProblemType(eps,EPS_HEP);CHKERRQ(ierr); // EPS_HEP: Hermitian eigenvalue problem.
+        ierr = EPSSetProblemType(eps,EPS_GHIEP);CHKERRQ(ierr); // EPS_HEP: Hermitian eigenvalue problem.
+        // for generalized eigenproblem both A and B should be Hermitian (symmetric for real matrices) and B should be
+        // positive (semi-)definite to use ESP_HEP. If B is not positive (semi-)definite then the problem cannot be considered
+        //Hermitian but symmetry can still be exploited to some extent in some solvers (problem type EPS_GHIEP)
 
         double tol1 = 1e-8;
         int max_iter = 1000;
