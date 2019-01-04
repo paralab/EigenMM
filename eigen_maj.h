@@ -60,7 +60,7 @@ private:
     MPI_Comm comm = MPI_COMM_WORLD;
     Mat A = nullptr;
     Mat B = nullptr; // used for generalized eigenvalue problem
-    int eig_num = 0; // number of computed eigenvaleus.
+    unsigned int eig_num = 0; // number of computed eigenvaleus.
 
 public:
 
@@ -291,7 +291,7 @@ public:
         EPSType        type;
         PetscReal      tol;
         Vec            xr, xi, *Iv, *Cv;
-        PetscInt       maxit, i, its, lits, nconv, total_nconv, nini=0, ncon=0;
+        PetscInt       maxit, i, its, lits, nconv, nini=0, ncon=0;
         PetscViewer    viewer;
         PetscBool      ishermitian;
         PetscErrorCode ierr;
@@ -386,7 +386,6 @@ public:
         //                    Solve the eigensystem
         //   - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-        total_nconv = 0; // total number of eigenvalues found.
         PetscReal threshold = 0.2 * mat_size;
 
         PetscReal inta = 0;
@@ -394,14 +393,47 @@ public:
         PetscReal interval_step = intb - inta;
         PetscReal start_interval = inta;
 
-        while(total_nconv < threshold) {
+        // store eigenvalues and eigenvectors in the class.
+        ierr = MatCreateVecs(A,nullptr,&xr);CHKERRQ(ierr);
+        ierr = MatCreateVecs(A,nullptr,&xi);CHKERRQ(ierr);
+
+        int nlocal;
+        VecGetLocalSize(xr, &nlocal);
+
+        auto temp_size = (unsigned long)floor(threshold);
+        eig_val_real.resize(temp_size);
+        eig_val_imag.resize(temp_size);
+        eig_vec_real.resize(temp_size, std::vector<double> (nlocal));
+        eig_vec_imag.resize(temp_size, std::vector<double> (nlocal));
+
+        double* vec;
+        unsigned int eig_num_prev = 0;
+
+        while(eig_num < threshold) {
             // Set the interval and other settings for spectrum slicing
             ierr = EPSSetInterval(eps, inta, intb); CHKERRQ(ierr);
 
             ierr = EPSSolve(eps); CHKERRQ(ierr);
 
             ierr = EPSGetConverged(eps,&nconv);CHKERRQ(ierr);
-            ierr = PetscPrintf(PETSC_COMM_WORLD," Number of eigenvalues found in [%.2f, %.2f]: %D\n", inta, intb ,nconv);CHKERRQ(ierr);
+            eig_num_prev = eig_num;
+            eig_num += nconv;
+            ierr = PetscPrintf(PETSC_COMM_WORLD," Number of eigenvalues found in [%.2f, %.2f]: %D. Total: %D\n", inta, intb, nconv, eig_num);CHKERRQ(ierr);
+
+            if(eig_num > threshold){
+                eig_val_real.resize(eig_num);
+                eig_val_imag.resize(eig_num);
+                eig_vec_real.resize(eig_num, std::vector<double> (nlocal));
+                eig_vec_imag.resize(eig_num, std::vector<double> (nlocal));
+            }
+
+            for (i = 0; i < nconv; i++) {
+                EPSGetEigenpair(eps, i, &eig_val_real[i + eig_num_prev], &eig_val_imag[i + eig_num_prev], xr, xi);
+                VecGetArray(xr, &vec);
+                memcpy(&eig_vec_real[i + eig_num_prev][0], &vec[0], nlocal * sizeof(double));
+                VecGetArray(xi, &vec);
+                memcpy(&eig_vec_imag[i + eig_num_prev][0], &vec[0], nlocal * sizeof(double));
+            }
 
 #ifdef _DEBUG1_
             // Optional: Get some information from the solver and display it
@@ -436,39 +468,10 @@ public:
 
             inta += interval_step;
             intb += interval_step;
-            total_nconv += nconv;
         }
 
         ierr = PetscPrintf(PETSC_COMM_WORLD," -------------------------------------------------------\n");CHKERRQ(ierr);
-        ierr = PetscPrintf(PETSC_COMM_WORLD," Total number of eigenvalues found in [%.2f, %.2f]: %D (%% %.2f)\n", start_interval, inta ,total_nconv, (float)100*total_nconv/mat_size);CHKERRQ(ierr);
-
-        // store eigenvalues and eigenvectors in the class.
-
-        ierr = MatCreateVecs(A,NULL,&xr);CHKERRQ(ierr);
-        ierr = MatCreateVecs(A,NULL,&xi);CHKERRQ(ierr);
-
-        int nlocal;
-        VecGetLocalSize(xr, &nlocal);
-
-        ierr = EPSGetConverged(eps,&nconv);CHKERRQ(ierr);
-        eig_val_real.resize(nconv);
-        eig_val_imag.resize(nconv);
-        eig_vec_real.resize(nconv, std::vector<double> (nlocal));
-        eig_vec_imag.resize(nconv, std::vector<double> (nlocal));
-
-        eig_num = nconv;
-
-//        ierr = EPSIsHermitian(eps,&ishermitian);CHKERRQ(ierr);
-
-        double* vec;
-        for (i = 0; i < nconv; i++) {
-            EPSGetEigenpair(eps, i, &eig_val_real[i], &eig_val_imag[i], xr, xi);
-            VecGetArray(xr, &vec);
-            memcpy(&eig_vec_real[i][0], &vec[0], nlocal * sizeof(double));
-            VecGetArray(xi, &vec);
-            memcpy(&eig_vec_imag[i][0], &vec[0], nlocal * sizeof(double));
-        }
-
+        ierr = PetscPrintf(PETSC_COMM_WORLD," Total number of eigenvalues found in [%.2f, %.2f]: %D (%% %.2f)\n", start_interval, inta, eig_num, (float)100*eig_num/mat_size);CHKERRQ(ierr);
 
         // Free work space
 
