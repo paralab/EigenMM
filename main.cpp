@@ -5,6 +5,8 @@
 #include <ctime>
 #include "mpi.h"
 
+#define _DEBUG1_
+
 typedef unsigned int index_t;
 typedef double value_t;
 
@@ -37,18 +39,33 @@ int main(int argc, char* argv[]) {
     laplacian3D(eigSolver, mx, my, mz);             // set matrix A: an example how to use eigSolver.setA(row, col, val) to set values.
     laplacian3D_randomized(eigSolver, mx, my, mz);  // set matrix B: an example how to use eigSolver.setB(row, col, val) to set values.
 
-    double t1 = MPI_Wtime();
+#ifdef _DEBUG1_
+    double t1, t2;
+    MPI_Barrier(comm);
+    t1 = MPI_Wtime();
+#endif
+
     eigSolver.assemble();                           // assemble
-    double t2 = MPI_Wtime();
+
+#ifdef _DEBUG1_
+    t2 = MPI_Wtime();
     print_time(t1, t2, "assemble", comm);
+#endif
 
 //    eigSolver.viewA();                            // view matrix A
 //    eigSolver.viewB();                            // view matrix B
 
+#ifdef _DEBUG1_
+    MPI_Barrier(comm);
     t1 = MPI_Wtime();
+#endif
+
     eigSolver.solve();                              // find eigenvalues and eigenvectors
+
+#ifdef _DEBUG1_
     t2 = MPI_Wtime();
     print_time(t1, t2, "solve", comm);
+#endif
 
 //    eigSolver.print_eig_val();                    // print eigenvalues (complex form)
 //    eigSolver.print_eig_val_real();               // print eigenvalues (real part)
@@ -62,13 +79,14 @@ int main(int argc, char* argv[]) {
     // this part shows how to access eigenvalues and eigenvectors
     // ----------------------------------------------------------
     int eig_num = eigSolver.get_eig_num();
+
+    MPI_Barrier(comm);
     if(rank==0) printf("number of eigenvalues computed: %u\n", eig_num);
+    MPI_Barrier(comm);
 
     /*
     double *eig_val_real = eigSolver.get_eig_val_real();
-//    eig_val_real = eigSolver.get_eig_val_real();
     double *eig_val_imag = eigSolver.get_eig_val_imag();
-//    eig_val_imag = eigSolver.get_eig_val_imag();
 
     MPI_Barrier(comm);
     if(rank == nprocs-1) {
