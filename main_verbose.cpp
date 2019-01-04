@@ -28,7 +28,7 @@ int main(int argc, char* argv[]) {
 
     if(rank == 0){
         printf("\nUsage:   mpirun -np <#procs> ./eigenSolver <axis_size> <mpd> \n");
-        printf("         the same axis_size is used for all x, y and z axes.\n");
+        printf("         the same axis_size is used for all x, y and z axes, which is for 3D-Laplacian.\n");
         printf("example: mpirun -np 2 ./eigenSolver 3 200 \n");
         printf("-------------------------------------------------------------\n");
     }
@@ -83,11 +83,11 @@ int main(int argc, char* argv[]) {
     MPI_Barrier(comm);
 #endif
 
-//    eigSolver.print_eig_val();                    // print eigenvalues (complex form)
+    eigSolver.print_eig_val();                    // print eigenvalues (complex form)
 //    eigSolver.print_eig_val_real();               // print eigenvalues (real part)
 //    eigSolver.print_eig_val_imag();               // print eigenvalues (imaginary part)
 
-//    eigSolver.print_eig_vec(-1);                  // print eigenvectors (complex form)
+    eigSolver.print_eig_vec(-1);                  // print eigenvectors (complex form)
 //    eigSolver.print_eig_vec_real(-1);             // print eigenvectors (real part)
 //    eigSolver.print_eig_vec_imag(-1);             // print eigenvectors (imaginary part)
 

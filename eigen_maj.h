@@ -14,41 +14,7 @@
 #define _DEBUG1_
 
 template<class T>
-int print_vector(const std::vector<T> &v, const int ran, const std::string &name, MPI_Comm comm){
-    // if ran >= 0 print the vector elements on proc with rank = ran
-    // otherwise print the vector elements on all processors in order. (first on proc 0, then proc 1 and so on.)
-
-    int rank, nprocs;
-    MPI_Comm_size(comm, &nprocs);
-    MPI_Comm_rank(comm, &rank);
-
-    unsigned iter = 0;
-    if(ran >= 0) {
-        if (rank == ran) {
-            printf("\n%s on proc = %d, size = %ld: \n", name.c_str(), ran, v.size());
-            for (auto i:v) {
-                std::cout << iter << "\t" << i << std::endl;
-                iter++;
-            }
-            printf("\n");
-        }
-    } else{
-        for(unsigned proc = 0; proc < nprocs; proc++){
-            MPI_Barrier(comm);
-            if (rank == proc) {
-                printf("\n%s on proc = %d, size = %ld: \n", name.c_str(), proc, v.size());
-                for (auto i:v) {
-                    std::cout << iter << "\t" << i << std::endl;
-                    iter++;
-                }
-                printf("\n");
-            }
-            MPI_Barrier(comm);
-        }
-    }
-
-    return 0;
-}
+int print_vector(const std::vector<T> &v, const int ran, const std::string &name, MPI_Comm comm);
 
 
 class eigen_maj{
@@ -64,6 +30,7 @@ private:
 
 public:
 
+    bool store_eigenpairs = false; // set this to true to store eigenpairs in the wrapper class.
     std::vector<double> eig_val_real; // real part of eigenvalues. the same on all the processors
     std::vector<double> eig_val_imag; // imaginary part of eigenvalues. the same on all the processors
     std::vector< std::vector<double> > eig_vec_real; // real part of eigenvectors. local part of the vector on each processor
@@ -290,7 +257,7 @@ public:
         PC             pc;
         EPSType        type;
         PetscReal      tol;
-        Vec            xr, xi, *Iv, *Cv;
+        Vec            xr=nullptr, xi=nullptr, *Iv, *Cv;
         PetscInt       maxit, i, its, lits, nconv, nini=0, ncon=0;
         PetscViewer    viewer;
         PetscBool      ishermitian;
@@ -393,20 +360,26 @@ public:
         PetscReal interval_step = intb - inta;
         PetscReal start_interval = inta;
 
-        // store eigenvalues and eigenvectors in the class.
-        ierr = MatCreateVecs(A,nullptr,&xr);CHKERRQ(ierr);
-        ierr = MatCreateVecs(A,nullptr,&xi);CHKERRQ(ierr);
+        double *vec;
+        int nlocal = 0;
 
-        int nlocal;
-        VecGetLocalSize(xr, &nlocal);
+        store_eigenpairs = true; // set this to true to store eigenpairs in the wrapper class.
+        if(store_eigenpairs) {
+            // store eigenvalues and eigenvectors in the class.
+            ierr = MatCreateVecs(A, nullptr, &xr);
+            CHKERRQ(ierr);
+            ierr = MatCreateVecs(A, nullptr, &xi);
+            CHKERRQ(ierr);
 
-        auto temp_size = (unsigned long)floor(threshold);
-        eig_val_real.resize(temp_size);
-        eig_val_imag.resize(temp_size);
-        eig_vec_real.resize(temp_size, std::vector<double> (nlocal));
-        eig_vec_imag.resize(temp_size, std::vector<double> (nlocal));
+            VecGetLocalSize(xr, &nlocal);
 
-        double* vec;
+            auto temp_size = (unsigned long) floor(threshold);
+            eig_val_real.resize(temp_size);
+            eig_val_imag.resize(temp_size);
+            eig_vec_real.resize(temp_size, std::vector<double>(nlocal));
+            eig_vec_imag.resize(temp_size, std::vector<double>(nlocal));
+        }
+
         unsigned int eig_num_prev = 0;
 
         while(eig_num < threshold) {
@@ -421,21 +394,23 @@ public:
             eig_num += nconv;
             ierr = PetscPrintf(PETSC_COMM_WORLD," Number of eigenvalues found in [%.2f, %.2f]: %D. Total: %D (%% %.2f)\n\n", inta, intb, nconv, eig_num, (float)100*eig_num/mat_size);CHKERRQ(ierr);
 
-            if(eig_num > threshold){
-                eig_val_real.resize(eig_num);
-                eig_val_imag.resize(eig_num);
-                eig_vec_real.resize(eig_num, std::vector<double> (nlocal));
-                eig_vec_imag.resize(eig_num, std::vector<double> (nlocal));
-            }
+            // uncomment to store eigenpairs in the wrapper class
+            if(store_eigenpairs) {
+                if (eig_num > threshold) {
+                    eig_val_real.resize(eig_num);
+                    eig_val_imag.resize(eig_num);
+                    eig_vec_real.resize(eig_num, std::vector<double>(nlocal));
+                    eig_vec_imag.resize(eig_num, std::vector<double>(nlocal));
+                }
 
-            for (i = 0; i < nconv; i++) {
-                EPSGetEigenpair(eps, i, &eig_val_real[i + eig_num_prev], &eig_val_imag[i + eig_num_prev], xr, xi);
-                VecGetArray(xr, &vec);
-                memcpy(&eig_vec_real[i + eig_num_prev][0], &vec[0], nlocal * sizeof(double));
-                VecGetArray(xi, &vec);
-                memcpy(&eig_vec_imag[i + eig_num_prev][0], &vec[0], nlocal * sizeof(double));
+                for (i = 0; i < nconv; i++) {
+                    EPSGetEigenpair(eps, i, &eig_val_real[i + eig_num_prev], &eig_val_imag[i + eig_num_prev], xr, xi);
+                    VecGetArray(xr, &vec);
+                    memcpy(&eig_vec_real[i + eig_num_prev][0], &vec[0], nlocal * sizeof(double));
+                    VecGetArray(xi, &vec);
+                    memcpy(&eig_vec_imag[i + eig_num_prev][0], &vec[0], nlocal * sizeof(double));
+                }
             }
-
 
 #ifdef _DEBUG1_
             // Optional: Get some information from the solver and display it
@@ -478,8 +453,10 @@ public:
         // Free work space
 
         ierr = EPSDestroy(&eps);CHKERRQ(ierr);
-        ierr = VecDestroy(&xr);CHKERRQ(ierr);
-        ierr = VecDestroy(&xi);CHKERRQ(ierr);
+        if(store_eigenpairs){
+            ierr = VecDestroy(&xr);CHKERRQ(ierr);
+            ierr = VecDestroy(&xi);CHKERRQ(ierr);
+        }
         if (nini > 0) {
             ierr = VecDestroyVecs(nini,&Iv);CHKERRQ(ierr);
         }
@@ -502,6 +479,10 @@ public:
 
         int rank;
         MPI_Comm_rank(comm, &rank);
+
+        if(!store_eigenpairs){
+            if(rank==0) printf("set store_eigenpairs to true to store eigenpairs in the wrapper class.\n");
+        }
 
         MPI_Barrier(comm);
         if(rank==0){
@@ -541,6 +522,10 @@ public:
         int rank, nprocs;
         MPI_Comm_size(comm, &nprocs);
         MPI_Comm_rank(comm, &rank);
+
+        if(!store_eigenpairs){
+            if(rank==0) printf("set store_eigenpairs to true to store eigenpairs in the wrapper class.\n");
+        }
 
         MPI_Barrier(comm);
         for(int i = 0; i < eig_vec_real.size(); i++) {
@@ -615,5 +600,43 @@ public:
     }
 
 };
+
+
+template<class T>
+int print_vector(const std::vector<T> &v, const int ran, const std::string &name, MPI_Comm comm){
+    // if ran >= 0 print the vector elements on proc with rank = ran
+    // otherwise print the vector elements on all processors in order. (first on proc 0, then proc 1 and so on.)
+
+    int rank, nprocs;
+    MPI_Comm_size(comm, &nprocs);
+    MPI_Comm_rank(comm, &rank);
+
+    unsigned iter = 0;
+    if(ran >= 0) {
+        if (rank == ran) {
+            printf("\n%s on proc = %d, size = %ld: \n", name.c_str(), ran, v.size());
+            for (auto i:v) {
+                std::cout << iter << "\t" << i << std::endl;
+                iter++;
+            }
+            printf("\n");
+        }
+    } else{
+        for(unsigned proc = 0; proc < nprocs; proc++){
+            MPI_Barrier(comm);
+            if (rank == proc) {
+                printf("\n%s on proc = %d, size = %ld: \n", name.c_str(), proc, v.size());
+                for (auto i:v) {
+                    std::cout << iter << "\t" << i << std::endl;
+                    iter++;
+                }
+                printf("\n");
+            }
+            MPI_Barrier(comm);
+        }
+    }
+
+    return 0;
+}
 
 #endif //EIGEN_MAJ_H
