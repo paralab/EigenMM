@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
     MPI_Barrier(comm);
 #endif
 
-    eigSolver.print_eig_val();                    // print eigenvalues (complex form)
+//    eigSolver.print_eig_val();                    // print eigenvalues (complex form)
 //    eigSolver.print_eig_val_real();               // print eigenvalues (real part)
 //    eigSolver.print_eig_val_imag();               // print eigenvalues (imaginary part)
 

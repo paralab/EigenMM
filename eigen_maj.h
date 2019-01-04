@@ -418,7 +418,7 @@ public:
             ierr = EPSGetConverged(eps,&nconv);CHKERRQ(ierr);
             eig_num_prev = eig_num;
             eig_num += nconv;
-            ierr = PetscPrintf(PETSC_COMM_WORLD," Number of eigenvalues found in [%.2f, %.2f]: %D. Total: %D\n", inta, intb, nconv, eig_num);CHKERRQ(ierr);
+            ierr = PetscPrintf(PETSC_COMM_WORLD," Number of eigenvalues found in [%.2f, %.2f]: %D. Total: %D (%% %.2f)\n", inta, intb, nconv, eig_num, (float)100*eig_num/mat_size);CHKERRQ(ierr);
 
             if(eig_num > threshold){
                 eig_val_real.resize(eig_num);
@@ -471,7 +471,7 @@ public:
         }
 
         ierr = PetscPrintf(PETSC_COMM_WORLD," -------------------------------------------------------\n");CHKERRQ(ierr);
-        ierr = PetscPrintf(PETSC_COMM_WORLD," Total number of eigenvalues found in [%.2f, %.2f]: %D (%% %.2f)\n", start_interval, inta, eig_num, (float)100*eig_num/mat_size);CHKERRQ(ierr);
+//        ierr = PetscPrintf(PETSC_COMM_WORLD," Total number of eigenvalues found in [%.2f, %.2f]: %D (%% %.2f)\n", start_interval, inta, eig_num, (float)100*eig_num/mat_size);CHKERRQ(ierr);
 
         // Free work space
 
