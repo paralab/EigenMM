@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
     if(rank == 0){
         printf("\nUsage:   mpirun -np <#procs> ./eigenSolver <axis_size> <mpd> \n");
         printf("         the same axis_size is used for all x, y and z axes, which is for 3D-Laplacian.\n");
-        printf("example: mpirun -np 2 ./eigenSolver 3 200 \n");
+        printf("example: mpirun -np 2 ./eigenSolver 3 20 \n");
         printf("-------------------------------------------------------------\n");
     }
 
@@ -70,7 +70,9 @@ int main(int argc, char* argv[]) {
     int nev = matrix_sz;
     int mpd(std::stoi(argv[2]));
 //    int ncv(std::stoi(argv[3]));
-    int ncv = nev + mpd;
+//    int ncv = nev + mpd;
+    int ncv = int(0.2*nev) + mpd;
+
     if(rank==0) printf(" size = %d, nev = %d, ncv = %d, mpd = %d\n", matrix_sz, nev, ncv, mpd);
     if(rank==0) printf(" ------------------------------------------------------\n");
 
