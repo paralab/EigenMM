@@ -41,8 +41,8 @@ int main(int argc, char* argv[]) {
     eigen_maj eigSolver;                            // define
     eigSolver.init(matrix_sz);                      // initialize. matrix_sz: matrix size (number of rows)
 
-    laplacian3D(eigSolver, mx, my, mz);             // set matrix A: an example how to use eigSolver.setA(row, col, val) to set values.
-    laplacian3D_randomized(eigSolver, mx, my, mz);  // set matrix B: an example how to use eigSolver.setB(row, col, val) to set values.
+    laplacian3D_randomized(eigSolver, mx, my, mz);  // set matrix A: an example how to use eigSolver.setA(row, col, val) to set values.
+    laplacian3D(eigSolver, mx, my, mz);             // set matrix B: an example how to use eigSolver.setB(row, col, val) to set values.
 
 #ifdef _DEBUG1_
     double t1, t2;
@@ -71,8 +71,8 @@ int main(int argc, char* argv[]) {
     int ncv = nev + mpd;
     if(rank==0) printf("size = %d, nev = %d, ncv = %d, mpd = %d\n", matrix_sz, nev, ncv, mpd);
 
-//    eigSolver.solve();                              // find eigenvalues and eigenvectors
-    eigSolver.solve(nev, ncv, mpd, false);          // find eigenvalues and eigenvectors
+    eigSolver.solve();                              // find eigenvalues and eigenvectors
+//    eigSolver.solve(nev, ncv, mpd, false);          // find eigenvalues and eigenvectors
 
 #ifdef _DEBUG1_
     t2 = MPI_Wtime();
@@ -199,38 +199,38 @@ int laplacian3D(eigen_maj &eigSolver, int mx, int my, int mz){
                     col_index[num] = node;
                     num++;
                     for(int l = 0; l < num; l++){
-                        eigSolver.setA(node, col_index[l], v[l]);
+                        eigSolver.setB(node, col_index[l], v[l]);
                     }
 
                 } else {
 
                     v[0] = -HxHydHz;
                     col_index[0] = node - (mx * my);
-                    eigSolver.setA(node, col_index[0], v[0]);
+                    eigSolver.setB(node, col_index[0], v[0]);
 
                     v[1] = -HxHzdHy;
                     col_index[1] = node - mx;
-                    eigSolver.setA(node, col_index[1], v[1]);
+                    eigSolver.setB(node, col_index[1], v[1]);
 
                     v[2] = -HyHzdHx;
                     col_index[2] = node - 1;
-                    eigSolver.setA(node, col_index[2], v[2]);
+                    eigSolver.setB(node, col_index[2], v[2]);
 
                     v[3] = 2.0*(HyHzdHx + HxHzdHy + HxHydHz);
                     col_index[3] = node;
-                    eigSolver.setA(node, col_index[3], v[3]);
+                    eigSolver.setB(node, col_index[3], v[3]);
 
                     v[4] = -HyHzdHx;
                     col_index[4] = node + 1;
-                    eigSolver.setA(node, col_index[4], v[4]);
+                    eigSolver.setB(node, col_index[4], v[4]);
 
                     v[5] = -HxHzdHy;
                     col_index[5] = node + mx;
-                    eigSolver.setA(node, col_index[5], v[5]);
+                    eigSolver.setB(node, col_index[5], v[5]);
 
                     v[6] = -HxHydHz;
                     col_index[6] = node + (mx * my);
-                    eigSolver.setA(node, col_index[6], v[6]);
+                    eigSolver.setB(node, col_index[6], v[6]);
 
                 }
             }
@@ -314,38 +314,38 @@ int laplacian3D_randomized(eigen_maj &eigSolver, int mx, int my, int mz){
                     col_index[num] = node;
                     num++;
                     for(int l = 0; l < num; l++){
-                        eigSolver.setB(node, col_index[l], (float(rand() %10) + 1)/10 * v[l]);
+                        eigSolver.setA(node, col_index[l], (float(rand() %10) + 1)/10 * v[l]);
                     }
 
                 } else {
 
                     v[0] = -HxHydHz;
                     col_index[0] = node - (mx * my);
-                    eigSolver.setB(node, col_index[0], (float(rand() %10) + 1)/10 * v[0]);
+                    eigSolver.setA(node, col_index[0], (float(rand() %10) + 1)/10 * v[0]);
 
                     v[1] = -HxHzdHy;
                     col_index[1] = node - mx;
-                    eigSolver.setB(node, col_index[1], (float(rand() %10) + 1)/10 * v[1]);
+                    eigSolver.setA(node, col_index[1], (float(rand() %10) + 1)/10 * v[1]);
 
                     v[2] = -HyHzdHx;
                     col_index[2] = node - 1;
-                    eigSolver.setB(node, col_index[2], (float(rand() %10) + 1)/10 * v[2]);
+                    eigSolver.setA(node, col_index[2], (float(rand() %10) + 1)/10 * v[2]);
 
                     v[3] = 2.0*(HyHzdHx + HxHzdHy + HxHydHz);
                     col_index[3] = node;
-                    eigSolver.setB(node, col_index[3], (float(rand() %10) + 1)/10 * v[3]);
+                    eigSolver.setA(node, col_index[3], (float(rand() %10) + 1)/10 * v[3]);
 
                     v[4] = -HyHzdHx;
                     col_index[4] = node + 1;
-                    eigSolver.setB(node, col_index[4], (float(rand() %10) + 1)/10 * v[4]);
+                    eigSolver.setA(node, col_index[4], (float(rand() %10) + 1)/10 * v[4]);
 
                     v[5] = -HxHzdHy;
                     col_index[5] = node + mx;
-                    eigSolver.setB(node, col_index[5], (float(rand() %10) + 1)/10 * v[5]);
+                    eigSolver.setA(node, col_index[5], (float(rand() %10) + 1)/10 * v[5]);
 
                     v[6] = -HxHydHz;
                     col_index[6] = node + (mx * my);
-                    eigSolver.setB(node, col_index[6], (float(rand() %10) + 1)/10 * v[6]);
+                    eigSolver.setA(node, col_index[6], (float(rand() %10) + 1)/10 * v[6]);
 
                 }
             }
