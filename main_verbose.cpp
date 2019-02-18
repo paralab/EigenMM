@@ -28,7 +28,8 @@ int main(int argc, char* argv[]) {
 
     if(rank == 0){
         printf("\nUsage:   mpirun -np <#procs> ./veigenSolver <axis_size> <mpd> \n");
-        printf("         the same axis_size is used for all x, y and z axes, which is for 3D-Laplacian.\n");
+        printf("         the same axis_size is used for all x, y and z axes, which is for 3D-Laplacian.\n"
+               "         pass mpd if you want to use solve_interval, otherwise skip that.\n");
         printf("example: mpirun -np 2 ./veigenSolver 3 20 \n");
         printf("-------------------------------------------------------------\n");
     }
@@ -67,17 +68,26 @@ int main(int argc, char* argv[]) {
     t1 = MPI_Wtime();
 #endif
 
+// simple solve function
+// =======================================================
+/*
+    eigSolver.solve();                              // find eigenvalues and eigenvectors
+*/
+// interval solve function
+// =======================================================
+
     int nev = matrix_sz;
     int mpd(std::stoi(argv[2]));
 //    int ncv(std::stoi(argv[3]));
 //    int ncv = nev + mpd;
     int ncv = int(0.3*nev);
 
-    if(rank==0) printf(" size = %d, nev = %d, ncv = %d, mpd = %d\n", matrix_sz, nev, ncv, mpd);
-    if(rank==0) printf(" ------------------------------------------------------\n");
+    if(rank==0) printf("size = %d, nev = %d, ncv = %d, mpd = %d\n", matrix_sz, nev, ncv, mpd);
+    if(rank==0) printf("------------------------------------------------------\n");
 
-    eigSolver.solve();                              // find eigenvalues and eigenvectors
-//    eigSolver.solve(nev, ncv, mpd, false);          // find eigenvalues and eigenvectors
+    eigSolver.solve_interval(nev, ncv, mpd, false);          // find eigenvalues and eigenvectors
+
+// =======================================================
 
 #ifdef _DEBUG1_
     t2 = MPI_Wtime();
@@ -85,7 +95,7 @@ int main(int argc, char* argv[]) {
     MPI_Barrier(comm);
 #endif
 
-//    eigSolver.print_eig_val();                    // print eigenvalues (complex form)
+    eigSolver.print_eig_val();                    // print eigenvalues (complex form)
 //    eigSolver.print_eig_val_real();               // print eigenvalues (real part)
 //    eigSolver.print_eig_val_imag();               // print eigenvalues (imaginary part)
 
@@ -361,7 +371,7 @@ int laplacian3D_randomized(eigen_maj &eigSolver, int mx, int my, int mz){
 }
 
 
-double print_time(double t_start, double t_end, std::string function_name, MPI_Comm comm){
+double print_time(double t_start, double t_end, const std::string function_name, MPI_Comm comm){
 
     int rank, nprocs;
     MPI_Comm_rank(comm, &rank);
