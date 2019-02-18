@@ -16,7 +16,7 @@ To see an example, check main.cpp.
 
 ---
 
-To use this solver include the header file **eigen_maj.h**.
+To use this solver include the header file **eigen_mm.h**.
 
 ---
 
