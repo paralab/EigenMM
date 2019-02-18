@@ -1,4 +1,4 @@
-#include "eigen_maj.h"
+#include "eigen_mm.h"
 #include <slepceps.h>
 #include <iostream>
 #include <vector>

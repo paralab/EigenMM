@@ -1,4 +1,4 @@
-#include "eigen_maj.h"
+#include "eigen_mm.h"
 #include <slepceps.h>
 #include <iostream>
 #include <vector>
@@ -27,9 +27,9 @@ int main(int argc, char* argv[]) {
     MPI_Comm_rank(comm, &rank);
 
     if(rank == 0){
-        printf("\nUsage:   mpirun -np <#procs> ./eigenSolver <axis_size> <mpd> \n");
+        printf("\nUsage:   mpirun -np <#procs> ./veigenSolver <axis_size> <mpd> \n");
         printf("         the same axis_size is used for all x, y and z axes, which is for 3D-Laplacian.\n");
-        printf("example: mpirun -np 2 ./eigenSolver 3 20 \n");
+        printf("example: mpirun -np 2 ./veigenSolver 3 20 \n");
         printf("-------------------------------------------------------------\n");
     }
 
