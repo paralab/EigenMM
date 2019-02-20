@@ -1,14 +1,19 @@
 #!/bin/bash
 
-module load mumps/5.0.2
-module load petsc/3.8.3
+# set address for the nektarpp_eigensolver source directory
+export NEK_EIG=/home/majidrp/Projects/nektarpp_eigensolver/
 
-export PETSC_ARCH=
-
-if [ ! -d "slepc-3.8.3" ]; then
-    tar -xzf slepc-3.8.3.tar.gz
+if [ -z "${NEK_EIG}" ]; then
+    echo "set NEK_EIG to nektarpp_eigensolver source directory."
 fi
-cd slepc-3.8.3
+
+export PETSC_DIR=${NEK_EIG}/build/ThirdParty/petsc-3.7.7
+export PETSC_ARCH=c-opt
+
+if [ ! -d "slepc-3.7.4" ]; then
+    tar -xzf slepc-3.7.4.tar.gz
+fi
+cd slepc-3.7.4
 export SLEPC_DIR=`pwd`
 ./configure
 make
