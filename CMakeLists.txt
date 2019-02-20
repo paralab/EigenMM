@@ -33,7 +33,6 @@ include_directories(
 
 # paste the SLEPC_DIR address here:
 
-
 set(SLEPC_DIR "~/Software/slepc-3.8.3")
 set(SLEPC_LIB ${SLEPC_DIR}/${PETSC_ARCH}/lib/libslepc.so)
 include_directories(
