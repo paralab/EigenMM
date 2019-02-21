@@ -1,19 +1,20 @@
 #!/bin/bash
 
-# set address for the nektarpp_eigensolver source directory
-export NEK_EIG=/home/majidrp/Projects/nektarpp_eigensolver/
+# set PETSc environment variables
+export PETSC_DIR=
+export PETSC_ARCH=
 
-if [ -z "${NEK_EIG}" ]; then
-    echo "set NEK_EIG to nektarpp_eigensolver source directory."
+if [ -z "${PETSC_DIR}" ]; then
+    echo "set PETSC_DIR to PETSc source directory."
+fi
+if [ -z "${PETSC_ARCH}" ]; then
+    echo "set PETSC_ARCH."
 fi
 
-export PETSC_DIR=${NEK_EIG}/build/ThirdParty/petsc-3.7.7
-export PETSC_ARCH=c-opt
-
-if [ ! -d "slepc-3.7.4" ]; then
-    tar -xzf slepc-3.7.4.tar.gz
+if [ ! -d "slepc-3.8.3" ]; then
+    tar -xzf slepc-3.8.3.tar.gz
 fi
-cd slepc-3.7.4
+cd slepc-3.8.3
 export SLEPC_DIR=`pwd`
 ./configure
 make
