@@ -36,6 +36,12 @@ include_directories(
 
 # -----------------------------------------------------------------------
 
+ADD_NEKTAR_LIBRARY(eigenSolver
+        SOURCES ${SOURCE_FILES}
+        HEADERS ${HEADER_FILES}
+        SUMMARY "eigenSolver"
+        DESCRIPTION "Scalable eigensolver.")
+
 #add_executable(eigenSolver main.cpp eigen_mm.h)
 #target_link_libraries(eigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
 
