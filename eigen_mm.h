@@ -1,8 +1,10 @@
 #ifndef eigen_mm_H
 #define eigen_mm_H
 
-#include <petsc.h>
-#include <slepceps.h>
+//#include <petsc.h>
+//#include <slepceps.h>
+#include </home/majidrp/Software/petsc-3.8.4/include/petsc.h> // todo: fix this
+#include </home/majidrp/Projects/nektarpp_eigensolver/library/MultiRegions/EigenMM/slepc-3.8.3/include/slepceps.h> // todo: fix this
 
 #include <vector>
 #include <set>
