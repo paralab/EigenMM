@@ -50,8 +50,10 @@ include_directories(
 
 # -----------------------------------------------------------------------
 
+include_directories(include)
 set(SOURCE_FILES ${SOURCE_FILES} main.cpp)
-set(HEADER_FILES ${HEADER_FILES} eigen_mm.h)
+set(HEADER_FILES ${HEADER_FILES} include/eigen_mm.h)
+
 add_library(EigenMM SHARED ${SOURCE_FILES})
 target_link_libraries(EigenMM ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB_EigenMM})
 install(FILES ${HEADER_FILES} DESTINATION ${CMAKE_INSTALL_DIR}/include)
