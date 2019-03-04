@@ -266,8 +266,8 @@ public:
         PetscReal      tol;
         Vec            xr=nullptr, xi=nullptr, *Iv, *Cv;
         PetscInt       maxit, i, its, lits, nconv, nini=0, ncon=0;
-        PetscViewer    viewer;
-        PetscBool      ishermitian;
+//        PetscViewer    viewer;
+//        PetscBool      ishermitian;
         PetscErrorCode ierr;
 
         // default:
@@ -463,8 +463,8 @@ public:
         PetscReal      tol;
         Vec            xr=nullptr, xi=nullptr, *Iv, *Cv;
         PetscInt       maxit, i, its, lits, nconv, nini=0, ncon=0;
-        PetscViewer    viewer;
-        PetscBool      ishermitian;
+//        PetscViewer    viewer;
+//        PetscBool      ishermitian;
         PetscErrorCode ierr;
 
         // default:
@@ -565,7 +565,7 @@ public:
         PetscReal inta = 0.1;
         PetscReal intb = 0.2;
         PetscReal interval_step = intb - inta;
-        PetscReal start_interval = inta;
+//        PetscReal start_interval = inta;
 
         double *vec;
         int nlocal = 0;
