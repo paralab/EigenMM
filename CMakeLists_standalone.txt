@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.04)
-project(EigenMM)
+project(eigenSolver)
 
 set(CMAKE_CXX_STANDARD 11)
 
@@ -25,9 +25,9 @@ include_directories(
 # SLEPc
 
 # paste the SLEPC_DIR address here:
-#set(SLEPC_DIR /home/majidrp/Projects/nektarpp_eigensolver/library/MultiRegions/eigenSolver/slepc-3.8.3)
+set(SLEPC_DIR /home/majidrp/Projects/nektarpp_eigensolver/library/MultiRegions/eigenSolver/slepc-3.8.3)
 
-set(SLEPC_DIR "~/Software/slepc-3.8.3")
+#set(SLEPC_DIR "~/Software/slepc-3.8.3")
 set(SLEPC_LIB ${SLEPC_DIR}/${PETSC_ARCH}/lib/libslepc.so)
 include_directories(
         ${SLEPC_DIR}/include
@@ -36,22 +36,9 @@ include_directories(
 
 # -----------------------------------------------------------------------
 
-#ADD_NEKTAR_LIBRARY(eigenSolver
-#        SOURCES ${SOURCE_FILES}
-#        HEADERS ${HEADER_FILES}
-#        SUMMARY "eigenSolver"
-#        DESCRIPTION "Scalable eigensolver.")
-
 #add_executable(eigenSolver main.cpp eigen_mm.h)
 #target_link_libraries(eigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
 
-#add_executable(veigenSolver main_verbose.cpp eigen_mm.h)
-#target_link_libraries(veigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
-
-# -----------------------------------------------------------------------
-
-set(SOURCE_FILES ${SOURCE_FILES} main.cpp)
-set(HEADER_FILES ${HEADER_FILES} eigen_mm.h)
-add_library(EigenMM SHARED ${SOURCE_FILES})
-target_link_libraries(EigenMM ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
-install(FILES ${HEADER_FILES} DESTINATION ${CMAKE_INSTALL_DIR}/include )
+# this one prints information
+add_executable(eigenSolver main_verbose.cpp eigen_mm.h)
+target_link_libraries(eigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})

@@ -1,15 +1,9 @@
 #!/bin/bash
 
-# set PETSc environment variables
-export PETSC_DIR=
-export PETSC_ARCH=
+module load mumps/5.0.2
+module load petsc/3.8.3
 
-if [ -z "${PETSC_DIR}" ]; then
-    echo "set PETSC_DIR to PETSc source directory."
-fi
-if [ -z "${PETSC_ARCH}" ]; then
-    echo "set PETSC_ARCH."
-fi
+export PETSC_ARCH=
 
 if [ ! -d "slepc-3.8.3" ]; then
     tar -xzf slepc-3.8.3.tar.gz
