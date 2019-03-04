@@ -13,12 +13,12 @@ include_directories(${MPI_INCLUDE_PATH})
 # PETSc
 
 #Majid
-set(PETSC_DIR "~/Software/petsc-3.8.4")
-set(PETSC_ARCH "arch-linux2-c-opt")
-set(PETSC_LIB ${PETSC_DIR}/${PETSC_ARCH}/lib/libpetsc.so)
+set(PETSC_DIR_EigenMM "~/Software/petsc-3.8.4")
+set(PETSC_ARCH_EigenMM "arch-linux2-c-opt")
+set(PETSC_LIB_EigenMM ${PETSC_DIR_EigenMM}/${PETSC_ARCH_EigenMM}/lib/libpetsc.so)
 include_directories(
-        ${PETSC_DIR}/include
-        ${PETSC_DIR}/${PETSC_ARCH}/include
+        ${PETSC_DIR_EigenMM}/include
+        ${PETSC_DIR_EigenMM}/${PETSC_ARCH_EigenMM}/include
 )
 
 # -----------------------------------------------------------------------
@@ -28,10 +28,10 @@ include_directories(
 #set(SLEPC_DIR /home/majidrp/Projects/nektarpp_eigensolver/library/MultiRegions/eigenSolver/slepc-3.8.3)
 
 set(SLEPC_DIR "~/Software/slepc-3.8.3")
-set(SLEPC_LIB ${SLEPC_DIR}/${PETSC_ARCH}/lib/libslepc.so)
+set(SLEPC_LIB ${SLEPC_DIR}/${PETSC_ARCH_EigenMM}/lib/libslepc.so)
 include_directories(
         ${SLEPC_DIR}/include
-        ${SLEPC_DIR}/${PETSC_ARCH}/include
+        ${SLEPC_DIR}/${PETSC_ARCH_EigenMM}/include
 )
 
 # -----------------------------------------------------------------------
@@ -43,15 +43,15 @@ include_directories(
 #        DESCRIPTION "Scalable eigensolver.")
 
 #add_executable(eigenSolver main.cpp eigen_mm.h)
-#target_link_libraries(eigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
+#target_link_libraries(eigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB_EigenMM})
 
 #add_executable(veigenSolver main_verbose.cpp eigen_mm.h)
-#target_link_libraries(veigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
+#target_link_libraries(veigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB_EigenMM})
 
 # -----------------------------------------------------------------------
 
 set(SOURCE_FILES ${SOURCE_FILES} main.cpp)
 set(HEADER_FILES ${HEADER_FILES} eigen_mm.h)
 add_library(EigenMM SHARED ${SOURCE_FILES})
-target_link_libraries(EigenMM ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
+target_link_libraries(EigenMM ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB_EigenMM})
 install(FILES ${HEADER_FILES} DESTINATION ${CMAKE_INSTALL_DIR}/include )
