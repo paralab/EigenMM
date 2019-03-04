@@ -9,8 +9,8 @@
 typedef unsigned int index_t;
 typedef double value_t;
 
-int laplacian3D(eigen_maj &eigSolver, int mx, int my, int mz);
-int laplacian3D_randomized(eigen_maj &eigSolver, int mx, int my, int mz);
+int laplacian3D(eigen_mm &eigSolver, int mx, int my, int mz);
+int laplacian3D_randomized(eigen_mm &eigSolver, int mx, int my, int mz);
 
 #undef __FUNCT__
 #define __FUNCT__ "main"
@@ -34,7 +34,7 @@ int main(int argc, char* argv[]) {
     int mz(std::stoi(argv[3]));
     auto matrix_sz = unsigned(mx * my * mz);
 
-    eigen_maj eigSolver;                            // define
+    eigen_mm eigSolver;                            // define
     eigSolver.init(matrix_sz);                      // initialize. matrix_sz: matrix size (number of rows)
 
     laplacian3D(eigSolver, mx, my, mz);             // set matrix A: an example how to use eigSolver.setA(row, col, val) to set values.
@@ -89,7 +89,7 @@ int main(int argc, char* argv[]) {
 }
 
 
-int laplacian3D(eigen_maj &eigSolver, int mx, int my, int mz){
+int laplacian3D(eigen_mm &eigSolver, int mx, int my, int mz){
 
     MPI_Comm comm = MPI_COMM_WORLD;
     int rank, nprocs;
@@ -202,7 +202,7 @@ int laplacian3D(eigen_maj &eigSolver, int mx, int my, int mz){
 }
 
 
-int laplacian3D_randomized(eigen_maj &eigSolver, int mx, int my, int mz){
+int laplacian3D_randomized(eigen_mm &eigSolver, int mx, int my, int mz){
 
     MPI_Comm comm = MPI_COMM_WORLD;
     int rank, nprocs;

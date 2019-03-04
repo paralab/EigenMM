@@ -1,8 +1,7 @@
-#ifndef EIGEN_MAJ_H
-#define EIGEN_MAJ_H
+#ifndef eigen_mm_H
+#define eigen_mm_H
 
-#include "petsc.h"
-//#include "petscsys.h"
+#include <petsc.h>
 #include <slepceps.h>
 
 #include <vector>
@@ -17,7 +16,7 @@ template<class T>
 int print_vector(const std::vector<T> &v, const int ran, const std::string &name, MPI_Comm comm);
 
 
-class eigen_maj{
+class eigen_mm{
     // Generalized eigenvalue problem:
     // A v = \lambda B v
 
@@ -37,8 +36,8 @@ public:
     std::vector< std::vector<double> > eig_vec_imag; // imaginary part of eigenvectors. local part of the vector on each processor
 
 
-    eigen_maj() = default;
-    ~eigen_maj(){
+    eigen_mm() = default;
+    ~eigen_mm(){
         MatDestroy(&A);
         MatDestroy(&B);
         SlepcFinalize();
@@ -850,4 +849,4 @@ int print_vector(const std::vector<T> &v, const int ran, const std::string &name
     return 0;
 }
 
-#endif //EIGEN_MAJ_H
+#endif //eigen_mm_H
