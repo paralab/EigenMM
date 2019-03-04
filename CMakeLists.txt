@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.04)
-project(eigenSolver)
+project(EigenMM)
 
 set(CMAKE_CXX_STANDARD 11)
 
@@ -45,5 +45,13 @@ include_directories(
 #add_executable(eigenSolver main.cpp eigen_mm.h)
 #target_link_libraries(eigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
 
-add_executable(veigenSolver main_verbose.cpp eigen_mm.h)
-target_link_libraries(veigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
+#add_executable(veigenSolver main_verbose.cpp eigen_mm.h)
+#target_link_libraries(veigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
+
+# -----------------------------------------------------------------------
+
+set(SOURCE_FILES ${SOURCE_FILES} main.cpp)
+set(HEADER_FILES ${HEADER_FILES} eigen_mm.h)
+add_library(EigenMM SHARED ${SOURCE_FILES})
+target_link_libraries(EigenMM ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB})
+install(FILES ${HEADER_FILES} DESTINATION ${CMAKE_INSTALL_DIR}/include )
