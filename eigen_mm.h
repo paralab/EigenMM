@@ -675,15 +675,15 @@ public:
     }
 
 
-    int print_eig_val_real(){
+    void print_eig_val_real(){
         print_vector(eig_val_real, 0, "eigenvalues (real part):", comm);
     }
 
-    int print_eig_val_imag(){
+    void print_eig_val_imag(){
         print_vector(eig_val_imag, 0, "eigenvalues (imaginary part):", comm);
     }
 
-    int print_eig_val(){
+    void print_eig_val(){
 
         int rank;
         MPI_Comm_rank(comm, &rank);
@@ -702,10 +702,9 @@ public:
         }
 
         MPI_Barrier(comm);
-        return 0;
     }
 
-    int print_eig_vec_real(int ran){
+    void print_eig_vec_real(int ran){
         // if ran >= 0 print the vector elements on proc with rank = ran
         // otherwise print the vector elements on all processors in order. (first on proc 0, then proc 1 and so on.)
         std::string text = "real part of eigenvector ";
@@ -714,7 +713,7 @@ public:
         }
     }
 
-    int print_eig_vec_imag(int ran){
+    void print_eig_vec_imag(int ran){
         // if ran >= 0 print the vector elements on proc with rank = ran
         // otherwise print the vector elements on all processors in order. (first on proc 0, then proc 1 and so on.)
         std::string text = "imaginary part of eigenvector ";
@@ -723,7 +722,7 @@ public:
         }
     }
 
-    int print_eig_vec(int ran){
+    void print_eig_vec(int ran){
         // if ran >= 0 print the vector elements on proc with rank = ran
         // otherwise print the vector elements on all processors in order. (first on proc 0, then proc 1 and so on.)
 
@@ -762,7 +761,6 @@ public:
 
         }
         MPI_Barrier(comm);
-
     }
 
 
