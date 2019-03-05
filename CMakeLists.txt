@@ -39,11 +39,14 @@ include_directories(
 )
 
 # -----------------------------------------------------------------------
+# Main Files
 
 include_directories(include)
+
 set(SOURCE_FILES ${SOURCE_FILES}
         src/eigen_mm.cpp
         src/utils.cpp)
+
 set(HEADER_FILES ${HEADER_FILES}
         include/eigen_mm.h
         )
@@ -63,3 +66,4 @@ install(FILES ${HEADER_FILES} DESTINATION ${CMAKE_INSTALL_DIR}/include)
 #add_executable(test1_info src/test_fractional1_info.cpp ${SOURCE_FILES} ${HEADER_FILES})
 #target_link_libraries(test1_info ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB_EigenMM})
 
+# -----------------------------------------------------------------------
