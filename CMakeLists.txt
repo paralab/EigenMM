@@ -14,8 +14,10 @@ include_directories(${MPI_INCLUDE_PATH})
 
 #Majid
 set(PETSC_DIR_EigenMM "~/softwares/petsc-3.8.0")
+set(PETSC_ARCH_EigenMM "arch-linux2-c-debug")
 #set(PETSC_DIR_EigenMM "~/Software/petsc-3.8.4")
-set(PETSC_ARCH_EigenMM "arch-linux2-c-opt")
+#set(PETSC_ARCH_EigenMM "arch-linux2-c-opt")
+
 set(PETSC_LIB_EigenMM ${PETSC_DIR_EigenMM}/${PETSC_ARCH_EigenMM}/lib/libpetsc.so)
 include_directories(
         ${PETSC_DIR_EigenMM}/include
@@ -38,24 +40,26 @@ include_directories(
 
 # -----------------------------------------------------------------------
 
-#ADD_NEKTAR_LIBRARY(eigenSolver
-#        SOURCES ${SOURCE_FILES}
-#        HEADERS ${HEADER_FILES}
-#        SUMMARY "eigenSolver"
-#        DESCRIPTION "Scalable eigensolver.")
-
-#add_executable(eigenSolver main.cpp eigen_mm.h)
-#target_link_libraries(eigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB_EigenMM})
-
-#add_executable(veigenSolver main_verbose.cpp eigen_mm.h)
-#target_link_libraries(veigenSolver ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB_EigenMM})
+include_directories(include)
+set(SOURCE_FILES ${SOURCE_FILES}
+        src/eigen_mm.cpp
+        src/aux_functions.cpp)
+set(HEADER_FILES ${HEADER_FILES}
+        include/eigen_mm.h
+        )
 
 # -----------------------------------------------------------------------
-
-include_directories(include)
-set(SOURCE_FILES ${SOURCE_FILES} main.cpp src/eigen_mm.cpp)
-set(HEADER_FILES ${HEADER_FILES} include/eigen_mm.h)
 
 add_library(EigenMM SHARED ${SOURCE_FILES})
 target_link_libraries(EigenMM ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB_EigenMM})
 install(FILES ${HEADER_FILES} DESTINATION ${CMAKE_INSTALL_DIR}/include)
+
+# -----------------------------------------------------------------------
+# tests
+
+#add_executable(test1 src/test_fractional1.cpp ${SOURCE_FILES} ${HEADER_FILES})
+#target_link_libraries(test1 ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB_EigenMM})
+
+#add_executable(test1_info src/test_fractional1_info.cpp ${SOURCE_FILES} ${HEADER_FILES})
+#target_link_libraries(test1_info ${MPI_LIBRARIES} ${SLEPC_LIB} ${PETSC_LIB_EigenMM})
+

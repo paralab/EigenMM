@@ -5,14 +5,13 @@
 #include <ctime>
 #include "mpi.h"
 
-#define _DEBUG1_
+#define __DEBUG1__
 
 typedef unsigned int index_t;
 typedef double value_t;
 
-int laplacian3D(eigen_mm &eigSolver, int mx, int my, int mz);
-int laplacian3D_randomized(eigen_mm &eigSolver, int mx, int my, int mz);
-double print_time(double t_start, double t_end, std::string function_name, MPI_Comm comm);
+int laplacian3D(eigen_mm &eigensolver1, int mx, int my, int mz);
+int laplacian3D_randomized(eigen_mm &eigensolver1, int mx, int my, int mz);
 
 #undef __FUNCT__
 #define __FUNCT__ "main"
@@ -41,29 +40,29 @@ int main(int argc, char* argv[]) {
     int mz = mx;
     auto matrix_sz = unsigned(mx * my * mz);
 
-    eigen_mm eigSolver;                             // define
-    eigSolver.init(matrix_sz);                      // initialize. matrix_sz: matrix size (number of rows)
+    eigen_mm eigensolver1;                             // define
+    eigensolver1.init(matrix_sz, comm);                      // initialize. matrix_sz: matrix size (number of rows)
 
-    laplacian3D_randomized(eigSolver, mx, my, mz);  // set matrix A: an example how to use eigSolver.setA(row, col, val) to set values.
-    laplacian3D(eigSolver, mx, my, mz);             // set matrix B: an example how to use eigSolver.setB(row, col, val) to set values.
+    laplacian3D_randomized(eigensolver1, mx, my, mz);  // set matrix A: an example how to use eigensolver1.setA(row, col, val) to set values.
+    laplacian3D(eigensolver1, mx, my, mz);             // set matrix B: an example how to use eigensolver1.setB(row, col, val) to set values.
 
-#ifdef _DEBUG1_
+#ifdef __DEBUG1__
     double t1, t2;
     MPI_Barrier(comm);
     t1 = MPI_Wtime();
 #endif
 
-    eigSolver.assemble();                           // assemble
+    eigensolver1.assemble();                           // assemble
 
-#ifdef _DEBUG1_
+#ifdef __DEBUG1__
     t2 = MPI_Wtime();
     print_time(t1, t2, "assemble", comm);
 #endif
 
-//    eigSolver.viewA();                            // view matrix A
-//    eigSolver.viewB();                            // view matrix B
+//    eigensolver1.viewA();                            // view matrix A
+//    eigensolver1.viewB();                            // view matrix B
 
-#ifdef _DEBUG1_
+#ifdef __DEBUG1__
     MPI_Barrier(comm);
     t1 = MPI_Wtime();
 #endif
@@ -71,7 +70,7 @@ int main(int argc, char* argv[]) {
 // simple solve function
 // =======================================================
 /*
-    eigSolver.solve();                              // find eigenvalues and eigenvectors
+    eigensolver1.solve();                              // find eigenvalues and eigenvectors
 */
 // interval solve function
 // =======================================================
@@ -85,36 +84,36 @@ int main(int argc, char* argv[]) {
     if(rank==0) printf("size = %d, nev = %d, ncv = %d, mpd = %d\n", matrix_sz, nev, ncv, mpd);
     if(rank==0) printf("------------------------------------------------------\n");
 
-    eigSolver.solve_interval(nev, ncv, mpd, false);          // find eigenvalues and eigenvectors
+    eigensolver1.solve_interval(nev, ncv, mpd, false);          // find eigenvalues and eigenvectors
 
 // =======================================================
 
-#ifdef _DEBUG1_
+#ifdef __DEBUG1__
     t2 = MPI_Wtime();
     print_time(t1, t2, "solve", comm);
     MPI_Barrier(comm);
 #endif
 
-    eigSolver.print_eig_val();                    // print eigenvalues (complex form)
-//    eigSolver.print_eig_val_real();               // print eigenvalues (real part)
-//    eigSolver.print_eig_val_imag();               // print eigenvalues (imaginary part)
+    eigensolver1.print_eig_val();                    // print eigenvalues (complex form)
+//    eigensolver1.print_eig_val_real();               // print eigenvalues (real part)
+//    eigensolver1.print_eig_val_imag();               // print eigenvalues (imaginary part)
 
-//    eigSolver.print_eig_vec(-1);                  // print eigenvectors (complex form)
-//    eigSolver.print_eig_vec_real(-1);             // print eigenvectors (real part)
-//    eigSolver.print_eig_vec_imag(-1);             // print eigenvectors (imaginary part)
+//    eigensolver1.print_eig_vec(-1);                  // print eigenvectors (complex form)
+//    eigensolver1.print_eig_vec_real(-1);             // print eigenvectors (real part)
+//    eigensolver1.print_eig_vec_imag(-1);             // print eigenvectors (imaginary part)
 
 
     // this part shows how to access eigenvalues and eigenvectors
     // ----------------------------------------------------------
     /*
-    int eig_num = eigSolver.get_eig_num();
+    int eig_num = eigensolver1.get_eig_num();
 
 //    MPI_Barrier(comm);
 //    if(rank==0) printf("number of eigenvalues computed: %u\n", eig_num);
 //    MPI_Barrier(comm);
 
-    double *eig_val_real = eigSolver.get_eig_val_real();
-    double *eig_val_imag = eigSolver.get_eig_val_imag();
+    double *eig_val_real = eigensolver1.get_eig_val_real();
+    double *eig_val_imag = eigensolver1.get_eig_val_imag();
 
     MPI_Barrier(comm);
     if(rank == nprocs-1) {
@@ -127,9 +126,9 @@ int main(int argc, char* argv[]) {
 
     int eig_vec_i = 1;
     double *eig_vec_i_real;
-    eig_vec_i_real = eigSolver.get_eig_vec_real(1);
+    eig_vec_i_real = eigensolver1.get_eig_vec_real(1);
     double *eig_vec_i_imag;
-    eig_vec_i_imag = eigSolver.get_eig_vec_imag(1);
+    eig_vec_i_imag = eigensolver1.get_eig_vec_imag(1);
 
     if(rank == 0) {
         printf("\neigenvector %d on processor %d: \n", eig_vec_i, rank);
@@ -143,7 +142,7 @@ int main(int argc, char* argv[]) {
 }
 
 
-int laplacian3D(eigen_mm &eigSolver, int mx, int my, int mz){
+int laplacian3D(eigen_mm &eigensolver1, int mx, int my, int mz){
 
     MPI_Comm comm = MPI_COMM_WORLD;
     int rank, nprocs;
@@ -214,38 +213,38 @@ int laplacian3D(eigen_mm &eigSolver, int mx, int my, int mz){
                     col_index[num] = node;
                     num++;
                     for(int l = 0; l < num; l++){
-                        eigSolver.setB(node, col_index[l], v[l]);
+                        eigensolver1.setB(node, col_index[l], v[l]);
                     }
 
                 } else {
 
                     v[0] = -HxHydHz;
                     col_index[0] = node - (mx * my);
-                    eigSolver.setB(node, col_index[0], v[0]);
+                    eigensolver1.setB(node, col_index[0], v[0]);
 
                     v[1] = -HxHzdHy;
                     col_index[1] = node - mx;
-                    eigSolver.setB(node, col_index[1], v[1]);
+                    eigensolver1.setB(node, col_index[1], v[1]);
 
                     v[2] = -HyHzdHx;
                     col_index[2] = node - 1;
-                    eigSolver.setB(node, col_index[2], v[2]);
+                    eigensolver1.setB(node, col_index[2], v[2]);
 
                     v[3] = 2.0*(HyHzdHx + HxHzdHy + HxHydHz);
                     col_index[3] = node;
-                    eigSolver.setB(node, col_index[3], v[3]);
+                    eigensolver1.setB(node, col_index[3], v[3]);
 
                     v[4] = -HyHzdHx;
                     col_index[4] = node + 1;
-                    eigSolver.setB(node, col_index[4], v[4]);
+                    eigensolver1.setB(node, col_index[4], v[4]);
 
                     v[5] = -HxHzdHy;
                     col_index[5] = node + mx;
-                    eigSolver.setB(node, col_index[5], v[5]);
+                    eigensolver1.setB(node, col_index[5], v[5]);
 
                     v[6] = -HxHydHz;
                     col_index[6] = node + (mx * my);
-                    eigSolver.setB(node, col_index[6], v[6]);
+                    eigensolver1.setB(node, col_index[6], v[6]);
 
                 }
             }
@@ -256,7 +255,7 @@ int laplacian3D(eigen_mm &eigSolver, int mx, int my, int mz){
 }
 
 
-int laplacian3D_randomized(eigen_mm &eigSolver, int mx, int my, int mz){
+int laplacian3D_randomized(eigen_mm &eigensolver1, int mx, int my, int mz){
 
     MPI_Comm comm = MPI_COMM_WORLD;
     int rank, nprocs;
@@ -329,38 +328,38 @@ int laplacian3D_randomized(eigen_mm &eigSolver, int mx, int my, int mz){
                     col_index[num] = node;
                     num++;
                     for(int l = 0; l < num; l++){
-                        eigSolver.setA(node, col_index[l], (float(rand() %10) + 1)/10 * v[l]);
+                        eigensolver1.setA(node, col_index[l], (float(rand() %10) + 1)/10 * v[l]);
                     }
 
                 } else {
 
                     v[0] = -HxHydHz;
                     col_index[0] = node - (mx * my);
-                    eigSolver.setA(node, col_index[0], (float(rand() %10) + 1)/10 * v[0]);
+                    eigensolver1.setA(node, col_index[0], (float(rand() %10) + 1)/10 * v[0]);
 
                     v[1] = -HxHzdHy;
                     col_index[1] = node - mx;
-                    eigSolver.setA(node, col_index[1], (float(rand() %10) + 1)/10 * v[1]);
+                    eigensolver1.setA(node, col_index[1], (float(rand() %10) + 1)/10 * v[1]);
 
                     v[2] = -HyHzdHx;
                     col_index[2] = node - 1;
-                    eigSolver.setA(node, col_index[2], (float(rand() %10) + 1)/10 * v[2]);
+                    eigensolver1.setA(node, col_index[2], (float(rand() %10) + 1)/10 * v[2]);
 
                     v[3] = 2.0*(HyHzdHx + HxHzdHy + HxHydHz);
                     col_index[3] = node;
-                    eigSolver.setA(node, col_index[3], (float(rand() %10) + 1)/10 * v[3]);
+                    eigensolver1.setA(node, col_index[3], (float(rand() %10) + 1)/10 * v[3]);
 
                     v[4] = -HyHzdHx;
                     col_index[4] = node + 1;
-                    eigSolver.setA(node, col_index[4], (float(rand() %10) + 1)/10 * v[4]);
+                    eigensolver1.setA(node, col_index[4], (float(rand() %10) + 1)/10 * v[4]);
 
                     v[5] = -HxHzdHy;
                     col_index[5] = node + mx;
-                    eigSolver.setA(node, col_index[5], (float(rand() %10) + 1)/10 * v[5]);
+                    eigensolver1.setA(node, col_index[5], (float(rand() %10) + 1)/10 * v[5]);
 
                     v[6] = -HxHydHz;
                     col_index[6] = node + (mx * my);
-                    eigSolver.setA(node, col_index[6], (float(rand() %10) + 1)/10 * v[6]);
+                    eigensolver1.setA(node, col_index[6], (float(rand() %10) + 1)/10 * v[6]);
 
                 }
             }
@@ -368,25 +367,4 @@ int laplacian3D_randomized(eigen_mm &eigSolver, int mx, int my, int mz){
     }
 
     return 0;
-}
-
-
-double print_time(double t_start, double t_end, const std::string function_name, MPI_Comm comm){
-
-    int rank, nprocs;
-    MPI_Comm_rank(comm, &rank);
-    MPI_Comm_size(comm, &nprocs);
-
-    double min, max, average;
-    double t_dif = t_end - t_start;
-
-    MPI_Reduce(&t_dif, &min, 1, MPI_DOUBLE, MPI_MIN, 0, comm);
-    MPI_Reduce(&t_dif, &max, 1, MPI_DOUBLE, MPI_MAX, 0, comm);
-    MPI_Reduce(&t_dif, &average, 1, MPI_DOUBLE, MPI_SUM, 0, comm);
-    average /= nprocs;
-
-    if (rank==0)
-        std::cout << std::endl << function_name << "\nmin: " << min << "\nave: " << average << "\nmax: " << max << std::endl << std::endl;
-
-    return average;
 }

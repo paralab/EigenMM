@@ -215,7 +215,7 @@ int eigen_mm::assemble(){
     }
 */
 
-int eigen_mm::solve(int nev = 0, int ncv = 0, int mpd = 0, bool verbose = false){
+int eigen_mm::solve(int nev, int ncv, int mpd, bool verbose){
 
     // nev: number of requested eigenvalues. enter 0 to request all eigenvalues.
     // verbose: pass "true" to print information.
@@ -412,7 +412,7 @@ int eigen_mm::solve(int nev = 0, int ncv = 0, int mpd = 0, bool verbose = false)
 }
 
 
-int eigen_mm::solve_interval(int nev = 0, int ncv = 0, int mpd = 0, bool verbose = false){
+int eigen_mm::solve_interval(int nev, int ncv, int mpd, bool verbose){
 
     // nev: number of requested eigenvalues. enter 0 to request all eigenvalues.
     // verbose: pass "true" to print information.
@@ -583,7 +583,7 @@ int eigen_mm::solve_interval(int nev = 0, int ncv = 0, int mpd = 0, bool verbose
             }
         }
 
-#ifdef _DEBUG1_
+#ifdef __DEBUG1__
         // Optional: Get some information from the solver and display it
         if(verbose1){
             ierr = EPSGetIterationNumber(eps,&its);CHKERRQ(ierr);
