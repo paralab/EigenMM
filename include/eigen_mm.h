@@ -1,7 +1,7 @@
 #ifndef eigen_mm_H
 #define eigen_mm_H
 
-#include "aux_functions.h"
+#include "utils.h"
 #include <petsc.h>
 #include <slepceps.h>
 //#include </home/majidrp/Software/petsc-3.8.4/include/petsc.h> // todo: fix this

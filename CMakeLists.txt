@@ -43,7 +43,7 @@ include_directories(
 include_directories(include)
 set(SOURCE_FILES ${SOURCE_FILES}
         src/eigen_mm.cpp
-        src/aux_functions.cpp)
+        src/utils.cpp)
 set(HEADER_FILES ${HEADER_FILES}
         include/eigen_mm.h
         )
