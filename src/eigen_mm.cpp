@@ -11,7 +11,7 @@ eigen_mm::~eigen_mm(){
 
 int eigen_mm::init(const unsigned int mat_size, MPI_Comm com){
 
-    SlepcInitialize(0, nullptr, nullptr, nullptr);
+    SlepcInitialize(nullptr, nullptr, nullptr, nullptr);
 
     comm = com;
 
@@ -37,6 +37,15 @@ int eigen_mm::setA(const unsigned int i, const unsigned int j, const double v){
 int eigen_mm::setB(const unsigned int i, const unsigned int j, const double v){
     MatSetValue(B, i, j, v, ADD_VALUES);
     return 0;
+}
+
+
+Mat& eigen_mm::getA(){
+    return A;
+}
+
+Mat& eigen_mm::getB(){
+    return B;
 }
 
 

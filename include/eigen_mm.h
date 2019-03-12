@@ -4,11 +4,8 @@
 #include "utils.h"
 #include <petsc.h>
 #include <slepceps.h>
-//#include </home/majidrp/Software/petsc-3.8.4/include/petsc.h> // todo: fix this
-//#include </home/majidrp/Projects/nektarpp_eigensolver/library/MultiRegions/EigenMM/slepc-3.8.3/include/slepceps.h> // todo: fix this
 
 #include <vector>
-#include <set>
 #include <string>
 #include <iostream>
 #include "mpi.h"
@@ -40,6 +37,8 @@ public:
     int init(unsigned int mat_size, MPI_Comm com);
     int setA(unsigned int i, unsigned int j, double v);
     int setB(unsigned int i, unsigned int j, double v);
+    Mat& getA();
+    Mat& getB();
     int assemble();
     int solve(int nev = 0, int ncv = 0, int mpd = 0, bool verbose = false);
     int solve_interval(int nev = 0, int ncv = 0, int mpd = 0, bool verbose = false);
