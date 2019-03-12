@@ -294,7 +294,7 @@ int eigen_mm::solve(int nev, int ncv, int mpd, bool verbose){
 //        ierr = EPSSetInitialSpace(eps,nini,Iv);CHKERRQ(ierr);
 //        ierr = EPSSetDeflationSpace(eps,ncon,Cv);CHKERRQ(ierr);
 
-    ierr = EPSSetWhichEigenpairs(eps,EPS_ALL);CHKERRQ(ierr);
+//    ierr = EPSSetWhichEigenpairs(eps,EPS_ALL);CHKERRQ(ierr);
 //    ierr = EPSGetST(eps,&st);CHKERRQ(ierr);
 //    ierr = STSetType(st,STSINVERT);CHKERRQ(ierr);
 //    ierr = STGetKSP(st,&ksp);CHKERRQ(ierr);
