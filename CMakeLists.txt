@@ -13,10 +13,10 @@ include_directories(${MPI_INCLUDE_PATH})
 # PETSc
 
 #Majid
-set(PETSC_DIR_EigenMM "~/softwares/petsc-3.8.0")
-set(PETSC_ARCH_EigenMM "arch-linux2-c-debug")
-#set(PETSC_DIR_EigenMM "~/Software/petsc-3.8.4")
-#set(PETSC_ARCH_EigenMM "arch-linux2-c-opt")
+#set(PETSC_DIR_EigenMM "~/softwares/petsc-3.8.0")
+#set(PETSC_ARCH_EigenMM "arch-linux2-c-debug")
+set(PETSC_DIR_EigenMM "~/Software/petsc-3.8.4")
+set(PETSC_ARCH_EigenMM "arch-linux2-c-opt")
 
 set(PETSC_LIB_EigenMM ${PETSC_DIR_EigenMM}/${PETSC_ARCH_EigenMM}/lib/libpetsc.so)
 include_directories(
@@ -30,8 +30,8 @@ include_directories(
 # paste the SLEPC_DIR address here:
 #set(SLEPC_DIR /home/majidrp/Projects/nektarpp_eigensolver/library/MultiRegions/eigenSolver/slepc-3.8.3)
 
-set(SLEPC_DIR "~/softwares/slepc-3.8.3")
-#set(SLEPC_DIR "~/Software/slepc-3.8.3")
+#set(SLEPC_DIR "~/softwares/slepc-3.8.3")
+set(SLEPC_DIR "~/Software/slepc-3.8.3")
 set(SLEPC_LIB ${SLEPC_DIR}/${PETSC_ARCH_EigenMM}/lib/libslepc.so)
 include_directories(
         ${SLEPC_DIR}/include
