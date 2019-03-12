@@ -269,7 +269,7 @@ int eigen_mm::solve(int nev, int ncv, int mpd, bool verbose){
 
     // Set operators. In this case, it is a generalized eigenvalue problem.
 
-//        ierr = EPSSetOperators(eps,A,NULL);CHKERRQ(ierr); // for standard
+//    ierr = EPSSetOperators(eps,A,NULL);CHKERRQ(ierr); // for standard
     ierr = EPSSetOperators(eps,A,B);CHKERRQ(ierr);
 
     // set problem type:
@@ -283,11 +283,11 @@ int eigen_mm::solve(int nev, int ncv, int mpd, bool verbose){
     // positive (semi-)definite to use ESP_HEP. If B is not positive (semi-)definite then the problem cannot be considered
     // Hermitian but symmetry can still be exploited to some extent in some solvers (problem type EPS_GHIEP)
     // http://slepc.upv.es/documentation/current/docs/manualpages/EPS/EPSSetProblemType.html
-    ierr = EPSSetProblemType(eps,EPS_GHEP);CHKERRQ(ierr);
+//    ierr = EPSSetProblemType(eps,EPS_GHEP);CHKERRQ(ierr);
 
-    double tol1 = 1e-8;
-    int max_iter = 1000;
-    EPSSetTolerances(eps,tol1, max_iter);
+//    double tol1 = 1e-8;
+//    int max_iter = 1000;
+//    EPSSetTolerances(eps, tol1, max_iter);
 
     // If the user provided initial guesses or constraints, pass them here
 
@@ -295,12 +295,12 @@ int eigen_mm::solve(int nev, int ncv, int mpd, bool verbose){
 //        ierr = EPSSetDeflationSpace(eps,ncon,Cv);CHKERRQ(ierr);
 
     ierr = EPSSetWhichEigenpairs(eps,EPS_ALL);CHKERRQ(ierr);
-    ierr = EPSGetST(eps,&st);CHKERRQ(ierr);
-    ierr = STSetType(st,STSINVERT);CHKERRQ(ierr);
-    ierr = STGetKSP(st,&ksp);CHKERRQ(ierr);
-    ierr = KSPGetPC(ksp,&pc);CHKERRQ(ierr);
-    ierr = KSPSetType(ksp,KSPPREONLY);CHKERRQ(ierr);
-    ierr = PCSetType(pc,PCCHOLESKY);CHKERRQ(ierr);
+//    ierr = EPSGetST(eps,&st);CHKERRQ(ierr);
+//    ierr = STSetType(st,STSINVERT);CHKERRQ(ierr);
+//    ierr = STGetKSP(st,&ksp);CHKERRQ(ierr);
+//    ierr = KSPGetPC(ksp,&pc);CHKERRQ(ierr);
+//    ierr = KSPSetType(ksp,KSPPREONLY);CHKERRQ(ierr);
+//    ierr = PCSetType(pc,PCCHOLESKY);CHKERRQ(ierr);
 //        ierr = EPSSetFromOptions(eps);CHKERRQ(ierr);
 
     // save matrix size
