@@ -76,12 +76,10 @@ public:
     eigen_mm();
     ~eigen_mm();
 
-    int init(SolverOptions opt);
-    int loadMatsFromFile(PetscInt dim, const char *dtype, PetscInt order, PetscInt nelems);
-    int loadMatsFromNektar();
-    int solve(Mat *V_out, Vec *lambda_out);
+    int init(Mat &K_in, Mat &M_in, SolverOptions opt);
     Mat& getK();
     Mat& getM();
+    int solve(Mat *V_out, Vec *lambda_out);
     void print_eig_val_real();
     void print_eig_val_imag();
     void print_eig_val();
