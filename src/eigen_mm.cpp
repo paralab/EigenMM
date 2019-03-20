@@ -3,13 +3,25 @@
 eigen_mm::eigen_mm() = default;
 
 eigen_mm::~eigen_mm(){
+    PetscPrintf(PETSC_COMM_WORLD, "Finalizing SLEPC\n");
+
+    // When I destroy K and M here, I get an error saying
+    //  that the matrices were either already freed or
+    //  there was a memory corruption. I've commented it out 
+    //  for now but there is probably a memory corruption 
+    //  happening somewhere
+
     //MatDestroy(&K);
     //MatDestroy(&M);
+    SlepcFinalize();
 };
 
 
-int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions opts_in)
+int eigen_mm::init(SolverOptions opts_in)
 {
+    SlepcInitialize(NULL, NULL, NULL, NULL);
+    PetscPrintf(PETSC_COMM_WORLD, "Slepc has been initialized\n");
+
     opts = opts_in;
 
     PetscPrintf(PETSC_COMM_WORLD, "Initializing communication hierarchy\n");
@@ -36,18 +48,56 @@ int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions opts_in)
     node.nevaluators = node.worldsize / node.processes_per_node;
     opts.nevaluators = node.nevaluators;
     opts.totalsubproblems = opts.nevaluators * opts.subproblemsperevaluator;
+}
 
-    PetscPrintf(PETSC_COMM_WORLD, "Distributing input system to evaluators\n");
+int eigen_mm::loadMatsFromFile(PetscInt dim, const char *dtype, PetscInt order, PetscInt nelems)
+{
+    PetscPrintf(PETSC_COMM_WORLD, "Loading matrices from file\n");
 
-    scatterInputMats(K_in, M_in);
+    PetscViewer viewer;
+    char filename[1024];
+
+    sprintf(filename, "/scratch/kingspeak/serial/u0450449/fractional/matrices/%dD/%s/%d/stiffness_%d", dim, dtype, order, nelems);
+    PetscViewerBinaryOpen(node.comm, filename, FILE_MODE_READ, &viewer);
+    MatCreate(node.comm, &K);
+    MatLoad(K, viewer);
+    MatSetOption(K, MAT_HERMITIAN, PETSC_TRUE);
+    MatAssemblyBegin(K, MAT_FINAL_ASSEMBLY);
+    MatAssemblyEnd(K, MAT_FINAL_ASSEMBLY);
+    PetscViewerDestroy(&viewer);
+
+    sprintf(filename, "/scratch/kingspeak/serial/u0450449/fractional/matrices/%dD/%s/%d/mass_%d", dim, dtype, order, nelems);
+    PetscViewerBinaryOpen(node.comm, filename, FILE_MODE_READ, &viewer);
+    MatCreate(node.comm, &M);
+    MatLoad(M, viewer);
+    MatSetOption(M, MAT_HERMITIAN, PETSC_TRUE);
+    MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
+    MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
+    PetscViewerDestroy(&viewer);
+}
+
+int eigen_mm::loadMatsFromNektar()
+{
+    //MatCreate(node.comm, &K);
+    //MatCreate(node.comm, &M);
+
+    // set values using nektar
+
+    // do matrix assembly
 }
 
 int eigen_mm::solve(Mat *V_out, Vec *lambda_out)
 {
+    PetscPrintf(PETSC_COMM_WORLD, "Running solver\n");
+    if (K == nullptr || M == nullptr)
+    {
+        PetscPrintf(PETSC_COMM_WORLD, "Matrices have not been loaded!\n");
+        return -1;
+    }
     findUpperBound();
     formSubproblems();
     PetscInt neval = solveSubproblems();
-    formEigenbasis(neval);
+    //formEigenbasis(neval);
 }
 
 Mat& eigen_mm::getK(){
