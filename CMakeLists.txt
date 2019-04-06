@@ -69,7 +69,10 @@ target_link_libraries(eigenmm ${MPI_LIBRARIES} ${SLEPC_LIBRARIES} ${PETSC_LIBRAR
 # Using include(ThirdParty...) PROBABLY installs the files during "make", that's why there is
 # no issue with other dependencies.
 file(COPY ${EIGENMM_HEADER_FILES} DESTINATION ${TPDIST}/include)
-file(COPY ${CMAKE_CURRENT_BINARY_DIR}/libeigenmm.so DESTINATION ${TPDIST}/lib)
+#file(COPY ${CMAKE_CURRENT_BINARY_DIR}/libeigenmm.so DESTINATION ${TPDIST}/lib)
+
+add_custom_command(TARGET eigenmm POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:eigenmm> ${TPDIST}/include)
 #install(FILES ${EIGENMM_HEADER_FILES} DESTINATION ${TPDIST}/include)
 #install(TARGETS eigenmm DESTINATION ${TPDIST}/lib)
 
