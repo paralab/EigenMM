@@ -3,10 +3,10 @@
 void loadMatsFromFile(Mat *K, Mat *M, 
     PetscInt dim, const char *dtype, PetscInt order, 
     PetscInt nelems);
-void checkCorrectness(Mat K, Mat M, Mat V, Vec lambda);
-void checkOrthogonality(Mat M, Mat V);
-void checkCompress1(Mat V);
-void checkCompress2(Mat V);
+void checkCorrectness(Mat K, Mat M, Mat V, Vec lambda, double *out_norms, SolverOptions options);
+void checkOrthogonality(Mat M, Mat V, SolverOptions options);
+void checkCompress1(Mat V, double *out_compress, double *out_decompress, double *out_reduce, SolverOptions options);
+void checkCompress2(Mat V, double *out_compress, double *out_decompress, double *out_reduce, SolverOptions options);
 double compress1D(double* array, int nx, double tolerance, int decompress);
 double compress2D(double* array, int nx, int ny, double tolerance, int decompress);
 
@@ -17,6 +17,7 @@ int main(int argc, char *argv[])
     SolverOptions options;
     eigen_mm solver;
 
+    // Set up solver paramters
     options.nevt = 100;
     options.splitmaxiters = 10;
     options.nodesperevaluator = 1;
@@ -29,33 +30,83 @@ int main(int argc, char *argv[])
     options.radtol = 1e-3;
     options.L = 0.01;
     options.R = 10000.0;
+    options.terse = false;
+    options.details = false;
 
     SlepcInitialize(NULL,NULL,NULL,NULL);
-    PetscPrintf(PETSC_COMM_WORLD, "Slepc has been initialized\n");
 
-    PetscPrintf(PETSC_COMM_WORLD, "Loading global input matrix\n");
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double start_time = MPI_Wtime();
+
+    // Load system from file
     loadMatsFromFile(&K, &M, 2, "square", 1, 49);
 
-    PetscPrintf(PETSC_COMM_WORLD, "Initializing solver\n");
+    // Compute eigenbasis
     solver.init(K, M, options);
-    PetscPrintf(PETSC_COMM_WORLD, "Running solver\n");
     solver.solve(&V, &lambda);
 
-    // Run compression experiment
-    checkCompress1(V);
-    checkCompress2(V);
+    // Run compression experiments
+    double *compress1, *decompress1, *reduce1;
+    double *compress2, *decompress2, *reduce2;
+    checkCompress1(V, compress1, decompress1, reduce1, options);
+    checkCompress2(V, compress2, decompress2, reduce2, options);
 
     // Check accuracy of solution
-    checkCorrectness(K,M,V,lambda);
-    checkOrthogonality(M,V);
+    double *norms;
+    checkCorrectness(K,M,V,lambda,norms, options);
+    checkOrthogonality(M,V, options);
 
-    // Compression experiments
-
-    PetscPrintf(PETSC_COMM_WORLD, "Finalizing SLEPC\n");
+    // Cleanup
     MatDestroy(&K);
     MatDestroy(&M);
     MatDestroy(&V);
     VecDestroy(&lambda);
+
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double end_time = MPI_Wtime();
+    double total_elapsed = end_time - start_time;
+
+    if (options.terse)
+        PetscPrintf(PETSC_COMM_WORLD, "%lf\n", total_elapsed);
+    else
+        PetscPrintf(PETSC_COMM_WORLD, "Total Elapsed: %lf\n", total_elapsed);
+    
+
+    if (options.details)
+    {
+        // Report
+        PetscInt N, neval;
+        MatGetSize(V, &N, &neval);
+
+        int size;
+        MPI_Comm_size(PETSC_COMM_WORLD, &size);
+
+        // compress1
+        for (int i = 0; i < neval; i++)
+            PetscPrintf(PETSC_COMM_WORLD, "%lf ", compress1[i]);
+        PetscPrintf(PETSC_COMM_WORLD, "\n");
+
+        // reduce1
+        for (int i = 0; i < neval; i++)
+            PetscPrintf(PETSC_COMM_WORLD, "%lf ", reduce1[i]);
+        PetscPrintf(PETSC_COMM_WORLD, "\n");
+
+        // compress2
+        for (int i = 0; i < size; i++)
+            PetscPrintf(PETSC_COMM_WORLD, "%lf ", compress2[i]);
+        PetscPrintf(PETSC_COMM_WORLD, "\n");
+
+        // reduce2
+        for (int i = 0; i < size; i++)
+            PetscPrintf(PETSC_COMM_WORLD, "%lf ", reduce2[i]);
+        PetscPrintf(PETSC_COMM_WORLD, "\n");
+
+        // correctness
+        for (int i = 0; i < neval; i++)
+            PetscPrintf(PETSC_COMM_WORLD, "%lf ", (double) norms[i]);
+        PetscPrintf(PETSC_COMM_WORLD, "\n");
+    }
+
     SlepcFinalize();
 
     return 0;
@@ -87,8 +138,11 @@ void loadMatsFromFile(Mat *K, Mat *M,
     PetscViewerDestroy(&viewer);
 }
 
-void checkCorrectness(Mat K, Mat M, Mat V, Vec lambda)
+void checkCorrectness(Mat K, Mat M, Mat V, Vec lambda, PetscReal *out_norms, SolverOptions options)
 {
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double start_time = MPI_Wtime();
+
     // residual = K*V - M*V*L;
 
     // 1) temp = V
@@ -114,21 +168,38 @@ void checkCorrectness(Mat K, Mat M, Mat V, Vec lambda)
 
     PetscReal minnorm = MPIU_MAX;
     PetscReal maxnorm = 0.0;
+    PetscReal avgnorm = 0.0;
     for (int k = 0; k < neval; k++)
     {
         minnorm = (minnorm < norms[k]) ? minnorm : norms[k];
         maxnorm = (maxnorm > norms[k]) ? maxnorm : norms[k];
+        avgnorm += norms[k];
     }
+    avgnorm /= neval;
 
     PetscPrintf(PETSC_COMM_WORLD, "Minimum eigenpair error: %.16lf\n", (double) minnorm);
     PetscPrintf(PETSC_COMM_WORLD, "Maximum eigenpair error: %.16lf\n", (double) maxnorm);
 
     MatDestroy(&residual);
     MatDestroy(&temp);
+
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double end_time = MPI_Wtime();
+    double elapsed = end_time - start_time;
+
+    if (options.terse)
+        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf %lf %lf", elapsed, start_time, end_time, (double) minnorm, (double) maxnorm, (double) avgnorm);
+    else
+        PetscPrintf(PETSC_COMM_WORLD, "(checkCorrectness) ||A*vk - lambdak*M*vk|| (min/max/avg) = (%lf / %lf / %lf), Elapsed = %lf, Start = %lf, End = %lf\n", (double) minnorm, (double) maxnorm, (double) avgnorm, elapsed, start_time, end_time);
+
+    out_norms = norms;
 }
 
-void checkOrthogonality(Mat M, Mat V)
+void checkOrthogonality(Mat M, Mat V, SolverOptions options)
 {
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double start_time = MPI_Wtime();
+
     // residual = eye(neval) - V' * M * V
 
     // temp = M*V
@@ -150,15 +221,27 @@ void checkOrthogonality(Mat M, Mat V)
     PetscScalar norm;
     MatNorm(residual, NORM_FROBENIUS, &norm);
 
-    PetscPrintf(PETSC_COMM_WORLD, "Orthogonality Norm: %.16lf\n", norm);
+    PetscPrintf(PETSC_COMM_WORLD, "Orthogonality Norm: %.16lf\n", (double) norm);
 
     VecDestroy(&ones);
     MatDestroy(&residual);
     MatDestroy(&temp);
+
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double end_time = MPI_Wtime();
+    double elapsed = end_time - start_time;
+
+    if (options.terse)
+        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf", elapsed, start_time, end_time, (double) norm);
+    else
+        PetscPrintf(PETSC_COMM_WORLD, "(Orthogonality Check) ||I - V'*V|| = %lf, Elapsed = %lf, Start = %lf, End = %lf\n", (double) norm, elapsed, start_time, end_time);
 }
 
-void checkCompress1(Mat V)
+void checkCompress1(Mat V, double *out_compress, double *out_decompress, double *out_reduce, SolverOptions options)
 {
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double start_time = MPI_Wtime();
+
     int rank, size;
     MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
     MPI_Comm_size(PETSC_COMM_WORLD, &size);
@@ -169,7 +252,7 @@ void checkCompress1(Mat V)
     MatGetSize(V, &N, &neval);
 
     double compress_times[neval];
-    double decompress_times[neval];
+    //double decompress_times[neval];
     double data_reduction[neval];
 
     // Single process:
@@ -210,10 +293,10 @@ void checkCompress1(Mat V)
         if (rank == 0)
         {
             // compress vk
-            double start_time = MPI_Wtime();
+            double compress_start_time = MPI_Wtime();
             double reduction = compress1D(&vk[0], N, 1e-14, 0);
-            double stop_time = MPI_Wtime();
-            compress_times[k] = stop_time - start_time;
+            double compress_stop_time = MPI_Wtime();
+            compress_times[k] = compress_stop_time - compress_start_time;
             data_reduction[k] = reduction;
         }
         VecRestoreArray(vk_world, &vk_local);
@@ -257,10 +340,29 @@ void checkCompress1(Mat V)
 
     VecDestroy(&vk_world);
 
-    // write to file full statistics
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double end_time = MPI_Wtime();
+    double elapsed = end_time - start_time;
+
+    if (options.terse)
+        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf %lf %lf %lf %lf %lf\n", elapsed, start_time, end_time, min_compress, max_compress, avg_compress, min_reduce, max_reduce, avg_reduce);
+    else
+    {
+        PetscPrintf(PETSC_COMM_WORLD, "(Compression Experiment 1)\n");
+        PetscPrintf(PETSC_COMM_WORLD, "  Elapsed = %lf, Start = %lf, End = %lf\n", elapsed, start_time, end_time);
+        PetscPrintf(PETSC_COMM_WORLD, "  Time to Compress: (min/max/avg) = (%lf / %lf / %lf)\n", min_compress, max_compress, avg_compress);
+        PetscPrintf(PETSC_COMM_WORLD, "  Data Reduction:   (min/max/avg) = (%lf / %lf / %lf)\n", min_reduce, max_reduce, avg_reduce);
+    }
+
+    out_compress = compress_times;
+    //*out_decompress = decompress_times;
+    out_reduce = data_reduction;
 }
-void checkCompress2(Mat V)
+void checkCompress2(Mat V, double *out_compress, double *out_decompress, double *out_reduce, SolverOptions options)
 {
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double start_time = MPI_Wtime();
+
     int rank, size;
     MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
     MPI_Comm_size(PETSC_COMM_WORLD, &size);
@@ -288,10 +390,10 @@ void checkCompress2(Mat V)
     PetscReal *v_block;
     MatDenseGetArray(V, &v_block);
 
-    double start_time = MPI_Wtime();
+    double compress_start_time = MPI_Wtime();
     double reduction = compress2D(&v_block[0], m, n, 1e-14, 0);
-    double stop_time = MPI_Wtime();
-    compress_times[rank] = stop_time - start_time;
+    double compress_stop_time = MPI_Wtime();
+    compress_times[rank] = compress_stop_time - compress_start_time;
     data_reduction[rank] = reduction;
 
     for (int p = 0; p < size; p++)
@@ -330,7 +432,23 @@ void checkCompress2(Mat V)
     //PetscPrintf(PETSC_COMM_WORLD, "Decompression time (min/max/avg): %lf, %lf, %lf\n", min_decompress, max_decompress, avg_decompress);
     PetscPrintf(PETSC_COMM_WORLD, "Data Reduction     (min/max/avg): %lf, %lf, %lf\n", min_reduce,     max_reduce,     avg_reduce);
 
-    // write to file full statistics
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double end_time = MPI_Wtime();
+    double elapsed = end_time - start_time;
+
+    if (options.terse)
+        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf %lf %lf %lf %lf %lf\n", elapsed, start_time, end_time, min_compress, max_compress, avg_compress, min_reduce, max_reduce, avg_reduce);
+    else
+    {
+        PetscPrintf(PETSC_COMM_WORLD, "(Compression Experiment 2)\n");
+        PetscPrintf(PETSC_COMM_WORLD, "  Elapsed = %lf, Start = %lf, End = %lf\n", elapsed, start_time, end_time);
+        PetscPrintf(PETSC_COMM_WORLD, "  Time to Compress: (min/max/avg) = (%lf / %lf / %lf)\n", min_compress, max_compress, avg_compress);
+        PetscPrintf(PETSC_COMM_WORLD, "  Data Reduction:   (min/max/avg) = (%lf / %lf / %lf)\n", min_reduce, max_reduce, avg_reduce);
+    }
+    
+    out_compress = compress_times;
+    //*out_decompress = decompress_times;
+    out_reduce = data_reduction;
 }
 
 /* compress or decompress array */

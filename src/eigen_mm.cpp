@@ -10,9 +10,10 @@ eigen_mm::~eigen_mm(){
 
 int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions opts_in)
 {
-    opts = opts_in;
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double start_time = MPI_Wtime();
 
-    PetscPrintf(PETSC_COMM_WORLD, "Initializing communication hierarchy\n");
+    opts = opts_in;
 
     // Initialize World Communicator
     MPI_Comm_rank(PETSC_COMM_WORLD, &(node.worldrank));
@@ -37,21 +38,41 @@ int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions opts_in)
     opts.nevaluators = node.nevaluators;
     opts.totalsubproblems = opts.nevaluators * opts.subproblemsperevaluator;
 
-    PetscPrintf(PETSC_COMM_WORLD, "Distributing input system to evaluators\n");
-
     scatterInputMats(K_in, M_in);
 
     node.neval = 0;
+
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double end_time = MPI_Wtime();
+    double elapsed = end_time - start_time;
+
+    // report init time
+    if (opts.terse)
+        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf\n", elapsed, start_time, end_time);
+    else
+        PetscPrintf(PETSC_COMM_WORLD, "(init) Elapsed: %lf, Start: %lf, End: %lf\n", elapsed, start_time, end_time);
 }
 
 int eigen_mm::solve(Mat *V_out, Vec *lambda_out)
 {
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double start_time = MPI_Wtime();
+
     findUpperBound();
     formSubproblems();
     PetscInt neval = solveSubproblems();
     formEigenbasis(neval);
     (*V_out) = V;
     (*lambda_out) = lambda;
+
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double end_time = MPI_Wtime();
+    double elapsed = end_time - start_time;
+
+    if (opts.terse)
+        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf\n", elapsed, start_time, end_time);
+    else
+        PetscPrintf(PETSC_COMM_WORLD, "(solve) Elapsed: %lf, Start: %lf, End: %lf\n", elapsed, start_time, end_time);
 }
 
 Mat& eigen_mm::getK(){
@@ -198,6 +219,9 @@ double* eigen_mm::get_eig_vec_imag(int i){
 // ==================== World ====================
 void eigen_mm::findUpperBound()
 {
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double start_time = MPI_Wtime();
+
     PetscReal lR;
     PetscInt rev, in_rev, iter;
 
@@ -235,10 +259,20 @@ void eigen_mm::findUpperBound()
     opts.R = lR;
 
     MPI_Barrier(PETSC_COMM_WORLD);
-    PetscPrintf(PETSC_COMM_WORLD, "Upper bound found: %lf\n", (double) lR);
+    double end_time = MPI_Wtime();
+    double elapsed = end_time - start_time;
+
+    // report findUpperBound timing
+    if (opts.terse)
+        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf\n", elapsed, start_time, end_time, (double) lR);
+    else
+        PetscPrintf(PETSC_COMM_WORLD, "(findUpperBound) Elapsed: %lf, Start: %lf, End: %lf, Upper Bound: %lf\n", elapsed, start_time, end_time, (double) lR);
 }
 void eigen_mm::formSubproblems()
 {
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double start_time = MPI_Wtime();
+
     PetscReal leafintervals[10000];
     PetscReal splitintervals[10000];
     PetscInt  leafcounts[10000];
@@ -248,8 +282,6 @@ void eigen_mm::formSubproblems()
     
     splitintervals[0] = opts.L;
     splitintervals[1] = opts.R;
-
-    PetscPrintf(node.comm, "[Evaluator %d]: Total interval is [%lf, %lf], Nevt = %d, Totalsubproblems = %d\n", node.id, (double) opts.L, (double) opts.R, (int) opts.nevt, (int) opts.totalsubproblems);
 
     PetscInt nleaves = 0;
     int current_split = 1;
@@ -325,10 +357,20 @@ void eigen_mm::formSubproblems()
     }
 
     MPI_Barrier(PETSC_COMM_WORLD);
-    PetscPrintf(PETSC_COMM_WORLD, "Subproblems formed : %d subproblems\n", (int) nleaves);
+    double end_time = MPI_Wtime();
+    double elapsed = end_time - start_time;
+
+    // report formSubproblems timing
+    if (opts.terse)
+        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %d\n", elapsed, start_time, end_time, (int) nleaves);
+    else
+        PetscPrintf(PETSC_COMM_WORLD, "(formSubproblems) Elapsed: %lf, Start: %lf, End: %lf, Total Subproblems: %d\n", elapsed, start_time, end_time, (int) nleaves);
 }
 PetscInt eigen_mm::solveSubproblems()
 {
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double start_time = MPI_Wtime();
+
     int job0       = node.id;
     int jobstride  = node.size;
     int njobs      = intervals.size() / 2;
@@ -336,7 +378,7 @@ PetscInt eigen_mm::solveSubproblems()
     PetscInt in_neval;
     for (int job = job0; job < njobs; job += jobstride)
     {
-        neval += solveSubProblem(intervals[2*job+0], intervals[2*job+1]);
+        neval += solveSubProblem(intervals[2*job+0], intervals[2*job+1], job);
     }
     for (int i = 1; i < node.size; i++)
     {
@@ -345,10 +387,23 @@ PetscInt eigen_mm::solveSubproblems()
         if (node.id == 0) neval += in_neval;
     }
     MPI_Bcast(&neval, 1, MPIU_INT, 0, PETSC_COMM_WORLD);
+
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double end_time = MPI_Wtime();
+    double elapsed = end_time - start_time;
+
+    if (opts.terse)
+        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %d\n", elapsed, start_time, end_time, (int) neval);
+    else
+        PetscPrintf(PETSC_COMM_WORLD, "(solveSubproblems) Elapsed: %lf, Start: %lf, End: %lf, Total Eigenpairs Found: %d\n", elapsed, start_time, end_time, (int) neval);
+
     return neval;
 }
 void eigen_mm::formEigenbasis(PetscInt neval)
 {
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double start_time = MPI_Wtime();
+
     // Process p has block b:
     //  size of block b: (lm by ln)
     //  ln is the number of eigenpairs computed by process p's evaluator
@@ -372,8 +427,6 @@ void eigen_mm::formEigenbasis(PetscInt neval)
     all_lm[node.rank] = lm;
     for (int i = 0; i < node.processes_per_node; i++)
         MPI_Bcast(&all_lm[i], 1, MPIU_INT, i, node.comm);
-    // MPI_Allgather(&all_lm[node.rank], 1, MPIU_INT, 
-    //     &all_lm[0], 1, MPIU_INT, node.comm);
     all_row0[0] = 0;
     for (int i = 1; i < node.processes_per_node; i++)
         all_row0[i] = all_row0[i-1] + all_lm[i-1];
@@ -386,42 +439,10 @@ void eigen_mm::formEigenbasis(PetscInt neval)
     all_ln[node.rowrank] = ln;
     for (int i = 0; i < node.rowsize; i++)
         MPI_Bcast(&all_ln[i], 1, MPIU_INT, i, node.rowcomm);
-    // MPI_Allgather(&all_ln[node.rowrank], 1, MPIU_INT, 
-    //     &all_ln[0], 1, MPIU_INT, node.rowcomm);
     all_col0[0] = 0;
     for (int i = 1; i < node.rowsize; i++)
         all_col0[i] = all_col0[i-1] + all_ln[i-1];
     PetscInt col0 = all_col0[node.rowrank];
-
-    // for (int i = 0; i < node.worldsize; i++)
-    // {
-    //     if (node.worldrank == i)
-    //     {
-    //         printf("Process %d:\n", i);
-    //         printf("  lm = %d\n", lm);
-    //         printf("  ln = %d\n", ln);
-    //         printf("  row0 = %d\n", row0);
-    //         printf("  col0 = %d\n", col0);
-    //         printf("  all_lm = [");
-    //         for (int j = 0; j < node.processes_per_node; j++)
-    //             printf("%d ", all_lm[j]);
-    //         printf("]\n");
-    //         printf("  all_ln = [");
-    //         for (int j = 0; j < node.rowsize; j++)
-    //             printf("%d ", all_ln[j]);
-    //         printf("]\n");
-    //         printf("  all_row0 = [");
-    //         for (int j = 0; j < node.processes_per_node; j++)
-    //             printf("%d ", all_row0[j]);
-    //         printf("]\n");
-    //         printf("  all_col0 = [");
-    //         for (int j = 0; j < node.rowsize; j++)
-    //             printf("%d ", all_col0[j]);
-    //         printf("]\n");
-    //         printf("\n");
-    //     }
-    //     MPI_Barrier(PETSC_COMM_WORLD);
-    // }
 
     // allocate idxm and idxn
     PetscInt idxm[lm];
@@ -459,6 +480,15 @@ void eigen_mm::formEigenbasis(PetscInt neval)
         FILE_MODE_WRITE, &viewer);
     VecView(lambda, viewer);
     PetscViewerDestroy(&viewer);
+
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double end_time = MPI_Wtime();
+    double elapsed = end_time - start_time;
+
+    if (opts.terse)
+        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf\n", elapsed, start_time, end_time);
+    else
+        PetscPrintf(PETSC_COMM_WORLD, "(formEigenbasis) Elapsed: %lf, Start: %lf, End: %lf\n", elapsed, start_time, end_time);
 }
 // ================================================
 
@@ -497,8 +527,11 @@ void eigen_mm::scatterInputMats(Mat &K_in, Mat &M_in)
     MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
     PetscViewerDestroy(&viewer);
 }
-PetscInt eigen_mm::solveSubProblem(PetscReal a, PetscReal b)
+PetscInt eigen_mm::solveSubProblem(PetscReal a, PetscReal b, int job)
 {
+    MPI_Barrier(node.comm);
+    double start_time = MPI_Wtime();
+
     // Set up solver
     PetscInt nconv;
     EPS eps;
@@ -542,17 +575,26 @@ PetscInt eigen_mm::solveSubProblem(PetscReal a, PetscReal b)
     EPSDestroy(&eps);
 
     node.neval += nconv;
-    PetscPrintf(node.comm, "[Evaluator %d]: Solved interval [%lf, %lf] and found %d eigenpairs.\n", node.id, (double) a, (double) b, (int) nconv);
+
+    MPI_Barrier(node.comm);
+    double end_time = MPI_Wtime();
+    double elapsed = end_time - start_time;
+
+    if (opts.terse)
+        PetscPrintf(node.comm, "%d %d %lf %lf %lf %d\n", node.id, job, elapsed, start_time, end_time, (int) nconv);
+    else
+        PetscPrintf(node.comm, "(solveSubproblem) Evaluator: %d, Subinterval: %d, Elapsed: %lf, Start: %lf, End: %lf, Number of Eigenpairs: %d\n", node.id, job, elapsed, start_time, end_time, (int) nconv);
 
     return nconv;
 }
 void eigen_mm::splitSubProblem(PetscReal a, PetscReal b, 
         PetscReal *c, PetscInt *out_ec_left, PetscInt *out_ec_right)
 {
+    MPI_Barrier(node.comm);
+    double start_time = MPI_Wtime();
+
     PetscReal bleft, bright, split, ratio;
     PetscInt iter, ec_left, ec_right;
-
-    PetscPrintf(node.comm, "[Evaluator %d]: Splitting interval [%lf, %lf]\n", node.id, (double) a, (double) b);
 
     bleft  = a;
     bright = b;
@@ -571,10 +613,15 @@ void eigen_mm::splitSubProblem(PetscReal a, PetscReal b,
     c[0]            = split;
     out_ec_left[0]  = ec_left;
     out_ec_right[0] = ec_right;
-    
+
     MPI_Barrier(node.comm);
-    PetscPrintf(node.comm, "[Evaluator %d]: Split interval [%lf, %lf] into [%lf, %lf] (%d) and [%lf, %lf] (%d)\n",
-        node.id, (double) a, (double) b, (double) a, (double) split, (int) ec_left, (double) split, (double) b, (int) ec_right);
+    double end_time = MPI_Wtime();
+    double elapsed = end_time - start_time;
+
+    if (opts.terse)
+        PetscPrintf(node.comm, "%d %lf %lf %lf %d %d %lf %lf %lf", node.id, elapsed, start_time, end_time, (int) ec_left, (int) ec_right, (double) a, (double) b, (double) split);
+    else
+        PetscPrintf(node.comm, "(splitSubproblem) Evaluator: %d, Elapsed: %lf, Start: %lf, End: %lf, Left Count: %d, Right Count: %d, a = %lf, b = %lf, c = %lf\n", node.id, elapsed, start_time, end_time, (int) ec_left, (int) ec_right, (double) a, (double) b, (double) split);
 }
 PetscInt eigen_mm::computeDev(PetscReal a, PetscReal U, PetscBool rl)
 {

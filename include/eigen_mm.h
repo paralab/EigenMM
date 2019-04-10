@@ -30,6 +30,8 @@ struct SolverOptions
     PetscReal radtol;
     PetscReal L;
     PetscReal R;
+    bool terse;
+    bool details;
 };
 struct NodeInfo
 {
@@ -105,7 +107,7 @@ public:
     void formEigenbasis(PetscInt neval);
 
     void scatterInputMats(Mat &K_in, Mat &M_in);
-    PetscInt solveSubProblem(PetscReal a, PetscReal b);
+    PetscInt solveSubProblem(PetscReal a, PetscReal b, int job);
     void splitSubProblem(PetscReal a, PetscReal b, PetscReal *c, 
         PetscInt *out_ec_left, PetscInt *out_ec_right);
     PetscInt computeDev(PetscReal a, PetscReal U, PetscBool rl);
