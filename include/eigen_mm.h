@@ -8,6 +8,7 @@
 #include <string>
 #include <iostream>
 #include "mpi.h"
+#include "zfp.h"
 
 #define __DEBUG1__
 
@@ -46,6 +47,9 @@ struct NodeInfo
     // additional properties
     PetscInt processes_per_node, taskspernode, nevaluators;
     PetscViewer viewer;
+
+    // Results
+    PetscInt neval;
 };
 
 class eigen_mm{

@@ -1,0 +1,53 @@
+{\color{blue} \noindent <Justify need for full eigenbasis> }
+
+\subsection{Method}
+
+{\color{red} \noindent <Describe discretization using Nektar++ to get stiffness and mass matrices> }
+
+{\color{blue} \noindent <Describe usage of SLEPc to solve for all eigenpairs within a given interval> }
+
+{\color{blue} \noindent <Motivate need for spectrum slicing> }
+
+\subsubsection{Spectrum Slicing}
+
+{\color{blue} \noindent <Describe spectrum slicing as a method to break the full eigenbasis computation into independent partial eigenbasis computations> }
+
+{\color{blue} \noindent <Motivate need for our communication hierarchy> }
+
+{\color{blue} \noindent <Define evaluator> }
+
+{\color{blue} \noindent <Describe load imbalance that occurs if total interval is divided evenly among evaluators> }
+
+{\color{blue} \noindent <Describe round-robin distribution of subintervals to available evaluators> }
+
+\subsubsection{Counting an Interval}
+
+{\color{blue} \noindent <Describe exact counting technique> }
+
+{\color{blue} \noindent <Describe approximate counting technique> }
+
+\subsubsection{Post-Processing and Orthogonalization}
+
+{\color{blue} \noindent <Describe post-processing orthogonalization step> }
+
+{\color{blue} \noindent <Give complexity estimate for post-processing step and justify> }
+
+\subsection{Results}
+
+{\color{blue} \noindent <Linear relationship between number of eigenvalues in an interval and the time it takes to solve that interval> }
+
+{\color{blue} \noindent <Performance scaling with respect to number of evaluators (up to the maximum I have access to on rmacc-summit) and problem size> }
+
+{\color{blue} \noindent <Orthogonality results without post-processing> }
+
+{\color{blue} \noindent <Load imbalance results with respect to number of subproblems per evaluator> }
+
+{\color{blue} \noindent <Comparison of performance and accuracy of exact and approximate interval counting> }
+
+\subsection{Potential Improvements}
+
+{\color{blue} \noindent <PETSc/SLEPc supported GPU acceleration to take full advantage of available computing resources> }
+
+{\color{blue} \noindent <Describe how even if GPU-accelerated eigenvalue solve sees no performance gain over CPU, it can function as an extra evaluator resulting in further ability to divide work> }
+
+{\color{blue} \noindent <Explain that load imbalance is mostly minimized, however, with the addition of GPU evaluators, it may be necessary to implement a task queue to ensure that an evaluator is only idle if there is no more work available for anyone> }

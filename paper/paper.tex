@@ -1,0 +1,73 @@
+\documentclass[sigconf]{acmart}
+
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage[noend]{algpseudocode}
+\usepackage{tikz}
+\usepackage{pgfplots}
+
+\graphicspath{ {images/} }
+
+\setcopyright{none}
+\acmConference[ICPP'19]{ICPP 2019}{August 2019}{Kyoto, Japan}
+\acmYear{2019}
+\copyrightyear{2019}
+
+\begin{document}
+	
+	\title{Fractional Eigenbasis Compression Placeholder Title}
+	
+	\author{<Author 1>}
+	\affiliation{%
+		\institution{<Institution 1>}
+		\city{<City 1>}
+		\state{<State 1>}
+	}
+	\email{<E-mail 1>}
+	
+	\author{<Author 2>}
+	\affiliation{%
+		\institution{<Institution 1>}
+		\city{<City 1>}
+		\state{<State 1>}
+	}
+	\email{<E-mail 2>}
+	
+	\author{<Author 3>}
+	\affiliation{%
+		\institution{<Institution 1>}
+		\city{<City 1>}
+		\state{<State 1>}
+	}
+	\email{<E-mail 3>}
+	
+	\begin{abstract}
+		In order to study the non-local diffusion operator known as the fractional laplacian, we have developed a framework to solve a simple fractional poisson problem using the spectral expansion method. This framework requires computation of a set of eigenpairs for the given problem geometry. For analytical purposes, we compute the entire eigenbasis in order to explore the impact of the non-local nature of the fractional laplacian on the convergence of the spectral expansion. Additionally, we employ the zfp compression library to reduce the amount of data required to store the full eigenbasis. Using this compression library, we explore strategies for balancing data reduction and performance impact in addition to leveraging any aspect of the non-local operator to improve either data reduction or performance.
+		
+		{\color{blue} This abstract will be updated as results are put into the paper. "We will explore" statements will be replaced with more concrete statements about results.}
+	\end{abstract}
+	
+	\maketitle
+	
+	\section{Introduction}
+	\input{intro}
+	
+	\section{Fractional Laplacian}
+	\input{flaplacian}
+	
+	\section{Eigenbasis Computation}
+	\input{eigenbasis}
+	
+	\section{Eigenbasis Storage and Compression}
+	\input{compression}
+	
+	\section{Results}
+	\input{results}
+	
+	\section{Conclusion}
+	\input{conclusion}
+	
+	\bibliographystyle{unsrt}
+	\bibliography{refs}
+	
+\end{document}
