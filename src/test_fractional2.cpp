@@ -3,10 +3,10 @@
 void loadMatsFromFile(Mat *K, Mat *M, 
     PetscInt dim, const char *dtype, PetscInt order, 
     PetscInt nelems);
-void checkCorrectness(Mat K, Mat M, Mat V, Vec lambda, double *out_norms, SolverOptions options);
+void checkCorrectness(Mat K, Mat M, Mat V, Vec lambda, PetscReal *norms, SolverOptions options);
 void checkOrthogonality(Mat M, Mat V, SolverOptions options);
-void checkCompress1(Mat V, double *out_compress, double *out_decompress, double *out_reduce, SolverOptions options);
-void checkCompress2(Mat V, double *out_compress, double *out_decompress, double *out_reduce, SolverOptions options);
+void checkCompress1(Mat V, double *compress_times, double *decompress_times, double *data_reduction, SolverOptions options);
+void checkCompress2(Mat V, double *compress_times, double *decompress_times, double *data_reduction, SolverOptions options);
 double compress1D(double* array, int nx, double tolerance, int decompress);
 double compress2D(double* array, int nx, int ny, double tolerance, int decompress);
 
@@ -45,22 +45,22 @@ int main(int argc, char *argv[])
     solver.init(K, M, options);
     solver.solve(&V, &lambda);
 
+    PetscInt N, neval;
+    MatGetSize(V, &N, &neval);
+
+    int size;
+    MPI_Comm_size(PETSC_COMM_WORLD, &size);
+
     // Run compression experiments
-    double *compress1, *decompress1, *reduce1;
-    double *compress2, *decompress2, *reduce2;
+    double compress1[neval], decompress1[neval], reduce1[neval];
+    double compress2[size],  decompress2[size],  reduce2[size];
     checkCompress1(V, compress1, decompress1, reduce1, options);
     checkCompress2(V, compress2, decompress2, reduce2, options);
 
     // Check accuracy of solution
-    double *norms;
-    checkCorrectness(K,M,V,lambda,norms, options);
-    checkOrthogonality(M,V, options);
-
-    // Cleanup
-    MatDestroy(&K);
-    MatDestroy(&M);
-    MatDestroy(&V);
-    VecDestroy(&lambda);
+    PetscReal norms[neval];
+    checkCorrectness(K, M, V, lambda, norms, options);
+    checkOrthogonality(M, V, options);
 
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
@@ -75,37 +75,37 @@ int main(int argc, char *argv[])
     if (options.details)
     {
         // Report
-        PetscInt N, neval;
-        MatGetSize(V, &N, &neval);
-
-        int size;
-        MPI_Comm_size(PETSC_COMM_WORLD, &size);
-
         // compress1
         for (int i = 0; i < neval; i++)
-            PetscPrintf(PETSC_COMM_WORLD, "%lf ", compress1[i]);
+            PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", compress1[i]);
         PetscPrintf(PETSC_COMM_WORLD, "\n");
 
         // reduce1
         for (int i = 0; i < neval; i++)
-            PetscPrintf(PETSC_COMM_WORLD, "%lf ", reduce1[i]);
+            PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", reduce1[i]);
         PetscPrintf(PETSC_COMM_WORLD, "\n");
 
         // compress2
         for (int i = 0; i < size; i++)
-            PetscPrintf(PETSC_COMM_WORLD, "%lf ", compress2[i]);
+            PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", compress2[i]);
         PetscPrintf(PETSC_COMM_WORLD, "\n");
 
         // reduce2
         for (int i = 0; i < size; i++)
-            PetscPrintf(PETSC_COMM_WORLD, "%lf ", reduce2[i]);
+            PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", reduce2[i]);
         PetscPrintf(PETSC_COMM_WORLD, "\n");
 
         // correctness
         for (int i = 0; i < neval; i++)
-            PetscPrintf(PETSC_COMM_WORLD, "%lf ", (double) norms[i]);
+            PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", (double) norms[i]);
         PetscPrintf(PETSC_COMM_WORLD, "\n");
     }
+
+    // Cleanup
+    MatDestroy(&K);
+    MatDestroy(&M);
+    MatDestroy(&V);
+    VecDestroy(&lambda);
 
     SlepcFinalize();
 
@@ -138,7 +138,7 @@ void loadMatsFromFile(Mat *K, Mat *M,
     PetscViewerDestroy(&viewer);
 }
 
-void checkCorrectness(Mat K, Mat M, Mat V, Vec lambda, PetscReal *out_norms, SolverOptions options)
+void checkCorrectness(Mat K, Mat M, Mat V, Vec lambda, PetscReal *norms, SolverOptions options)
 {
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
@@ -163,7 +163,7 @@ void checkCorrectness(Mat K, Mat M, Mat V, Vec lambda, PetscReal *out_norms, Sol
     MatMatMult(K, V, MAT_REUSE_MATRIX, PETSC_DEFAULT, &temp);
     MatAYPX(residual, -1, temp, DIFFERENT_NONZERO_PATTERN);
 
-    PetscReal norms[neval];
+    //PetscReal norms[neval];
     MatGetColumnNorms(residual, NORM_2, norms);
 
     PetscReal minnorm = MPIU_MAX;
@@ -192,7 +192,7 @@ void checkCorrectness(Mat K, Mat M, Mat V, Vec lambda, PetscReal *out_norms, Sol
     else
         PetscPrintf(PETSC_COMM_WORLD, "(checkCorrectness) ||A*vk - lambdak*M*vk|| (min/max/avg) = (%lf / %lf / %lf), Elapsed = %lf, Start = %lf, End = %lf\n", (double) minnorm, (double) maxnorm, (double) avgnorm, elapsed, start_time, end_time);
 
-    out_norms = norms;
+    //*out_norms = &norms[0];
 }
 
 void checkOrthogonality(Mat M, Mat V, SolverOptions options)
@@ -237,7 +237,7 @@ void checkOrthogonality(Mat M, Mat V, SolverOptions options)
         PetscPrintf(PETSC_COMM_WORLD, "(Orthogonality Check) ||I - V'*V|| = %lf, Elapsed = %lf, Start = %lf, End = %lf\n", (double) norm, elapsed, start_time, end_time);
 }
 
-void checkCompress1(Mat V, double *out_compress, double *out_decompress, double *out_reduce, SolverOptions options)
+void checkCompress1(Mat V, double *compress_times, double *decompress_times, double *data_reduction, SolverOptions options)
 {
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
@@ -251,9 +251,9 @@ void checkCompress1(Mat V, double *out_compress, double *out_decompress, double 
     PetscInt N, neval;
     MatGetSize(V, &N, &neval);
 
-    double compress_times[neval];
+    //double compress_times[neval];
     //double decompress_times[neval];
-    double data_reduction[neval];
+    //double data_reduction[neval];
 
     // Single process:
     // For each k:
@@ -354,11 +354,11 @@ void checkCompress1(Mat V, double *out_compress, double *out_decompress, double 
         PetscPrintf(PETSC_COMM_WORLD, "  Data Reduction:   (min/max/avg) = (%lf / %lf / %lf)\n", min_reduce, max_reduce, avg_reduce);
     }
 
-    out_compress = compress_times;
+    //*out_compress = &compress_times[0];
     //*out_decompress = decompress_times;
-    out_reduce = data_reduction;
+    //*out_reduce = &data_reduction[0];
 }
-void checkCompress2(Mat V, double *out_compress, double *out_decompress, double *out_reduce, SolverOptions options)
+void checkCompress2(Mat V, double *compress_times, double *decompress_times, double *data_reduction, SolverOptions options)
 {
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
@@ -372,9 +372,9 @@ void checkCompress2(Mat V, double *out_compress, double *out_decompress, double 
     PetscInt N, neval;
     MatGetSize(V, &N, &neval);
 
-    double compress_times[size];
-    double decompress_times[size];
-    double data_reduction[size];
+    //double compress_times[size];
+    //double decompress_times[size];
+    //double data_reduction[size];
 
     // Each process p:
     // 1) Get local block from V
@@ -446,9 +446,9 @@ void checkCompress2(Mat V, double *out_compress, double *out_decompress, double 
         PetscPrintf(PETSC_COMM_WORLD, "  Data Reduction:   (min/max/avg) = (%lf / %lf / %lf)\n", min_reduce, max_reduce, avg_reduce);
     }
     
-    out_compress = compress_times;
+    //*out_compress = &compress_times[0];
     //*out_decompress = decompress_times;
-    out_reduce = data_reduction;
+    //*out_reduce = &data_reduction[0];
 }
 
 /* compress or decompress array */
