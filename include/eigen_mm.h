@@ -8,7 +8,7 @@
 #include <string>
 #include <iostream>
 #include "mpi.h"
-#include "zfp.h"
+//#include "zfp.h"
 
 #define __DEBUG1__
 
