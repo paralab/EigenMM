@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
     options.L = 0.01;
     options.R = 10000.0;
     options.terse = false;
-    options.details = false;
+    options.details = true;
 
     SlepcInitialize(NULL,NULL,NULL,NULL);
 
@@ -39,10 +39,13 @@ int main(int argc, char *argv[])
     double start_time = MPI_Wtime();
 
     // Load system from file
-    loadMatsFromFile(&K, &M, 2, "square", 1, 49);
+    PetscPrintf(PETSC_COMM_WORLD, "Loading initial system\n");
+    loadMatsFromFile(&K, &M, 3, "cube", 1, 29);
 
     // Compute eigenbasis
+    PetscPrintf(PETSC_COMM_WORLD, "Initializing eigenbasis solver\n");
     solver.init(K, M, options);
+    PetscPrintf(PETSC_COMM_WORLD, "Computing eigenbasis\n");
     solver.solve(&V, &lambda);
 
     PetscInt N, neval;
@@ -177,9 +180,6 @@ void checkCorrectness(Mat K, Mat M, Mat V, Vec lambda, PetscReal *norms, SolverO
     }
     avgnorm /= neval;
 
-    PetscPrintf(PETSC_COMM_WORLD, "Minimum eigenpair error: %.16lf\n", (double) minnorm);
-    PetscPrintf(PETSC_COMM_WORLD, "Maximum eigenpair error: %.16lf\n", (double) maxnorm);
-
     MatDestroy(&residual);
     MatDestroy(&temp);
 
@@ -188,7 +188,7 @@ void checkCorrectness(Mat K, Mat M, Mat V, Vec lambda, PetscReal *norms, SolverO
     double elapsed = end_time - start_time;
 
     if (options.terse)
-        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf %lf %lf", elapsed, start_time, end_time, (double) minnorm, (double) maxnorm, (double) avgnorm);
+        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf %lf %lf\n", elapsed, start_time, end_time, (double) minnorm, (double) maxnorm, (double) avgnorm);
     else
         PetscPrintf(PETSC_COMM_WORLD, "(checkCorrectness) ||A*vk - lambdak*M*vk|| (min/max/avg) = (%lf / %lf / %lf), Elapsed = %lf, Start = %lf, End = %lf\n", (double) minnorm, (double) maxnorm, (double) avgnorm, elapsed, start_time, end_time);
 
@@ -220,8 +220,6 @@ void checkOrthogonality(Mat M, Mat V, SolverOptions options)
 
     PetscScalar norm;
     MatNorm(residual, NORM_FROBENIUS, &norm);
-
-    PetscPrintf(PETSC_COMM_WORLD, "Orthogonality Norm: %.16lf\n", (double) norm);
 
     VecDestroy(&ones);
     MatDestroy(&residual);

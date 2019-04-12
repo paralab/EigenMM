@@ -32,6 +32,9 @@ struct SolverOptions
     PetscReal R;
     bool terse;
     bool details;
+    bool debug;
+    bool saveoutput;
+    const char* output_filepath;
 };
 struct NodeInfo
 {

@@ -58,9 +58,13 @@ int eigen_mm::solve(Mat *V_out, Vec *lambda_out)
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
 
+    if (opts.debug) PetscPrintf(PETSC_COMM_WORLD, "finding upper bound\n");
     findUpperBound();
+    if (opts.debug) PetscPrintf(PETSC_COMM_WORLD, "forming subproblems\n");
     formSubproblems();
+    if (opts.debug) PetscPrintf(PETSC_COMM_WORLD, "solving subproblems\n");
     PetscInt neval = solveSubproblems();
+    if (opts.debug) PetscPrintf(PETSC_COMM_WORLD, "forming eigenbasis\n");
     formEigenbasis(neval);
     (*V_out) = V;
     (*lambda_out) = lambda;
@@ -222,6 +226,11 @@ void eigen_mm::findUpperBound()
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
 
+    PetscInt oldp = opts.p;
+    PetscInt oldnv = opts.nv;
+    opts.p = 100;
+    opts.nv = 30;
+
     PetscReal lR;
     PetscInt rev, in_rev, iter;
 
@@ -257,6 +266,8 @@ void eigen_mm::findUpperBound()
     }
 
     opts.R = lR;
+    opts.p = oldp;
+    opts.nv = oldnv;
 
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
@@ -467,19 +478,22 @@ void eigen_mm::formEigenbasis(PetscInt neval)
     VecAssemblyBegin(lambda);
     VecAssemblyEnd(lambda);
 
-    PetscViewer viewer;
-    const char *filenameV = "/scratch/kingspeak/serial/u0450449/fractional/matrices/V";
-    PetscViewerBinaryOpen(PETSC_COMM_WORLD, filenameV, 
-        FILE_MODE_WRITE, &viewer);
-    PetscViewerPushFormat(viewer, PETSC_VIEWER_NATIVE);
-    MatView(V, viewer);
-    PetscViewerDestroy(&viewer);
+    if (saveoutput)
+    {
+        PetscViewer viewer;
+        const char *filenameV = opts.output_filepath + "V" + (const char*) N;
+        PetscViewerBinaryOpen(PETSC_COMM_WORLD, filenameV, 
+            FILE_MODE_WRITE, &viewer);
+        PetscViewerPushFormat(viewer, PETSC_VIEWER_NATIVE);
+        MatView(V, viewer);
+        PetscViewerDestroy(&viewer);
 
-    const char *filenamelambda = "/scratch/kingspeak/serial/u0450449/fractional/matrices/lambda";
-    PetscViewerBinaryOpen(PETSC_COMM_WORLD, filenamelambda, 
-        FILE_MODE_WRITE, &viewer);
-    VecView(lambda, viewer);
-    PetscViewerDestroy(&viewer);
+        const char *filenamelambda = opts.output_filepath + "lambda" + (const char*) N;
+        PetscViewerBinaryOpen(PETSC_COMM_WORLD, filenamelambda, 
+            FILE_MODE_WRITE, &viewer);
+        VecView(lambda, viewer);
+        PetscViewerDestroy(&viewer);
+    }
 
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
@@ -495,37 +509,40 @@ void eigen_mm::formEigenbasis(PetscInt neval)
 // ==================== Evaluator ====================
 void eigen_mm::scatterInputMats(Mat &K_in, Mat &M_in)
 {
-    PetscViewer viewer;
+    MatCreateRedundantMatrix(K_in, node.nevaluators, node.comm, MAT_INITIAL_MATRIX, &K);
+    MatCreateRedundantMatrix(M_in, node.nevaluators, node.comm, MAT_INITIAL_MATRIX, &M);
 
-    const char *filenameK = "/scratch/kingspeak/serial/u0450449/fractional/matrices/tempK";
-    PetscViewerBinaryOpen(PETSC_COMM_WORLD, filenameK, 
-        FILE_MODE_WRITE, &viewer);
-    MatView(K_in, viewer);
-    PetscViewerDestroy(&viewer);
+    // PetscViewer viewer;
 
-    const char *filenameM = "/scratch/kingspeak/serial/u0450449/fractional/matrices/tempM";
-    PetscViewerBinaryOpen(PETSC_COMM_WORLD, filenameM, 
-        FILE_MODE_WRITE, &viewer);
-    MatView(M_in, viewer);
-    PetscViewerDestroy(&viewer);
+    // const char *filenameK = "/scratch/kingspeak/serial/u0450449/fractional/matrices/tempK";
+    // PetscViewerBinaryOpen(PETSC_COMM_WORLD, filenameK, 
+    //     FILE_MODE_WRITE, &viewer);
+    // MatView(K_in, viewer);
+    // PetscViewerDestroy(&viewer);
 
-    PetscViewerBinaryOpen(node.comm, filenameK, 
-        FILE_MODE_READ, &viewer);
-    MatCreate(node.comm, &K);
-    MatLoad(K, viewer);
-    MatSetOption(K, MAT_HERMITIAN, PETSC_TRUE);
-    MatAssemblyBegin(K, MAT_FINAL_ASSEMBLY);
-    MatAssemblyEnd(K, MAT_FINAL_ASSEMBLY);
-    PetscViewerDestroy(&viewer);
+    // const char *filenameM = "/scratch/kingspeak/serial/u0450449/fractional/matrices/tempM";
+    // PetscViewerBinaryOpen(PETSC_COMM_WORLD, filenameM, 
+    //     FILE_MODE_WRITE, &viewer);
+    // MatView(M_in, viewer);
+    // PetscViewerDestroy(&viewer);
 
-    PetscViewerBinaryOpen(node.comm, filenameM, 
-        FILE_MODE_READ, &viewer);
-    MatCreate(node.comm, &M);
-    MatLoad(M, viewer);
-    MatSetOption(M, MAT_HERMITIAN, PETSC_TRUE);
-    MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
-    MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
-    PetscViewerDestroy(&viewer);
+    // PetscViewerBinaryOpen(node.comm, filenameK, 
+    //     FILE_MODE_READ, &viewer);
+    // MatCreate(node.comm, &K);
+    // MatLoad(K, viewer);
+    // MatSetOption(K, MAT_HERMITIAN, PETSC_TRUE);
+    // MatAssemblyBegin(K, MAT_FINAL_ASSEMBLY);
+    // MatAssemblyEnd(K, MAT_FINAL_ASSEMBLY);
+    // PetscViewerDestroy(&viewer);
+
+    // PetscViewerBinaryOpen(node.comm, filenameM, 
+    //     FILE_MODE_READ, &viewer);
+    // MatCreate(node.comm, &M);
+    // MatLoad(M, viewer);
+    // MatSetOption(M, MAT_HERMITIAN, PETSC_TRUE);
+    // MatAssemblyBegin(M, MAT_FINAL_ASSEMBLY);
+    // MatAssemblyEnd(M, MAT_FINAL_ASSEMBLY);
+    // PetscViewerDestroy(&viewer);
 }
 PetscInt eigen_mm::solveSubProblem(PetscReal a, PetscReal b, int job)
 {
