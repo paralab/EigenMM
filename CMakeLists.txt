@@ -16,8 +16,8 @@ ENDIF("${isSystemDir}" STREQUAL "-1")
 # -----------------------------------------------------------------------
 # MPI
 
-#find_package(MPI REQUIRED)
-#include_directories(${MPI_INCLUDE_PATH})
+find_package(MPI REQUIRED)
+include_directories(${MPI_INCLUDE_PATH})
 
 # -----------------------------------------------------------------------
 # PETSc
