@@ -1,4 +1,5 @@
 #include "eigen_mm.h"
+#include <zfp.h>
 
 void loadMatsFromFile(Mat *K, Mat *M, 
     PetscInt dim, const char *dtype, PetscInt order, 
@@ -33,14 +34,26 @@ int main(int argc, char *argv[])
     options.terse = false;
     options.details = true;
 
-    SlepcInitialize(NULL,NULL,NULL,NULL);
+    SlepcInitialize(&argc,&argv,NULL,NULL);
+
+    // geometry paramters
+    PetscInt dim, nelems, order;
+    char dtype[1024];
+    char output_filepath[1024];
+    PetscOptionsGetInt(NULL, NULL, "-dim", &dim, NULL);
+    PetscOptionsGetInt(NULL, NULL, "-n", &nelems, NULL);
+    PetscOptionsGetInt(NULL, NULL, "-k", &order, NULL);
+    PetscOptionsGetString(NULL, NULL, "-D", dtype, 1024, NULL);
+    sprintf(output_filepath, "/scratch/kingspeak/serial/u0450449/fractional/matrices/%dD/%s/%d/", dim, dtype, order);
+    options.output_filepath = output_filepath;
+    options.saveoutput = true;
 
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
 
     // Load system from file
     PetscPrintf(PETSC_COMM_WORLD, "Loading initial system\n");
-    loadMatsFromFile(&K, &M, 3, "cube", 1, 29);
+    loadMatsFromFile(&K, &M, dim, dtype, order, nelems);
 
     // Compute eigenbasis
     PetscPrintf(PETSC_COMM_WORLD, "Initializing eigenbasis solver\n");
