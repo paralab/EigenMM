@@ -292,26 +292,31 @@ void checkCompress1(Mat V, double *compress_times, double *decompress_times, dou
         displs[p] = displs[p-1] + localsizes[p-1];
     
     std::vector<PetscReal> vk;
-    if (rank == 0) vk.resize(N);
-    for (int k = 0; k < neval; k++)
+    vk.resize(N);
+    for (int k = 0; k < neval/size; k++)
     {
-        MatGetColumnVector(V, vk_world, k);
-        VecGetArray(vk_world, &vk_local);
-        MPI_Gatherv(vk_local, localsize, MPIU_REAL, &vk[0], 
-            &localsizes[0], &displs[0], MPIU_REAL, 0, 
-            PETSC_COMM_WORLD);
-
-        if (rank == 0)
+        for (int i = 0; i < size; i++)
         {
-            // compress vk
-            double compress_start_time = MPI_Wtime();
-            double reduction = compress1D(&vk[0], N, 1e-14, 0);
-            double compress_stop_time = MPI_Wtime();
-            compress_times[k] = compress_stop_time - compress_start_time;
-            data_reduction[k] = reduction;
+            MatGetColumnVector(V, vk_world, size*k + i);
+            VecGetArray(vk_world, &vk_local);
+            MPI_Gatherv(vk_local, localsize, MPIU_REAL, &vk[0], 
+                &localsizes[0], &displs[0], MPIU_REAL, i, 
+                PETSC_COMM_WORLD);
         }
+
+        // compress vk
+        double compress_start_time = MPI_Wtime();
+        double reduction = compress1D(&vk[0], N, 1e-14, 0);
+        double compress_stop_time = MPI_Wtime();
+        compress_times[size*k+rank] = compress_stop_time - compress_start_time;
+        data_reduction[size*k+rank] = reduction;
+
+        for (int i = 0; i < size; i++)
+        {
+            MPI_Bcast(&compress_times[size*k + i], 1, MPI_DOUBLE, i, PETSC_COMM_WORLD);
+        }
+
         VecRestoreArray(vk_world, &vk_local);
-        MPI_Barrier(PETSC_COMM_WORLD);
     }
 
     // report:
