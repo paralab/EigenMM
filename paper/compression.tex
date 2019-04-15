@@ -1,13 +1,43 @@
-{\color{blue} <Details about zfp compression> }
+For our $N$ by $N$ sparse system, we are computing the entire set of $N$ eigenvectors and eigenvalues. The resulting eigenbasis is a dense $N$ by $N$ matrix $V$. The amount of memory required to store $V$ can be excessively large and scales rapidly with respect to the number of elements in the discretization. Therefore some method needed to be employed to reduce the storage requirements and potentially also reduce the amount of work necessary to apply the eigenbasis. In order to compress the data produced by our framework, we utilized Lawrence Livermore's zfp compression library \cite{zfp} to explore different strategies.
 
-\subsection{Method}
+Since $V$ is a PETSc matrix that is distributed among all of the available processes, the first compression strategy we explored was to have each process use zfp to compress its local block. This approach doesn't help reduce the amount of work to apply $V$ but it gives us an idea of how much compression is possible using zfp.
 
-{\color{blue} <Describe Eigenbasis data structure and the available storage modes> }
-
-{\color{blue} <Explain that each storage mode also corresponds to a compression strategy> }
-
-{\color{blue} <Describe how the Eigenbasis is applied and truncation criteria> }
+The second approach is to compress each eigenvector independently. For any given input function $f$ for the fractional poisson problem, there may be many eigenvectors (if not the majority) that will have scaling coefficients smaller than machine precision. By using this compression strategy, we could only decompress the specific eigenvectors we need for a given $f$ and skip any that will have no effect on the solution. By only keeping the $m$ most recently used eigenvectors in the decompressed state, we could also minimize the amount of time compressing and decompressing eigenvectors.
 
 \subsection{Results}
 
-{\color{blue} <Compare compression strategies; Data reduction and time to compress/decompress> }
+Using the already computed eigenbasis $V$ for $N = 30^3$, we ran experiments for both compression strategies to determine the time it takes to compress and the amount of data reduction achieved. For the first strategy, we compressed each local block using two evaluators, each with 28 processes. In figures \ref{fig:reduce2} and \ref{fig:compress2}, the results of this experiment can be seen.
+
+\begin{figure}
+	\caption{The amount of data reduction achieved by compressing each process's local block.}
+	\label{fig:reduce2}
+	\input{figures/reduce2}
+\end{figure}
+
+\begin{figure}
+	\caption{The amount of time it took to compress each process's local block.}
+	\label{fig:compress2}
+	\input{figures/compress2}
+\end{figure}
+
+Then the compression experiment is repeated for strategy 2, where instead of computing the local data blocks, each column of the matrix $V$ is compressed independently. The results of this compression experiment can then be seen in figures \ref{fig:reduce1} and \ref{fig:compress1}.
+
+\begin{figure}
+	\caption{The amount of data reduction achieved by compressing each individual eigenvector, sorted in ascending order by eigenvalue.}
+	\label{fig:reduce1}
+	\input{figures/reduce1}
+\end{figure}
+
+\begin{figure}
+	\caption{The amount of time it took to compress each individual eigenvector, sorted in ascending order by eigenvalue.}
+	\label{fig:compress1}
+	\input{figures/compress1}
+\end{figure}
+
+An important thing to note is that zfp is designed for compressing uniformly sampled data sets. Since we are compressing eigenvectors for arbitrary complex geometry, the data that is being compressed is not uniformly sampled and therefore the data reduction is fairly modest. Since there is also no correlation between eigenvectors, zfp's strengths are not being fully taken advantage of. A more fitting approach would be to use something that utilizes the geometry of the problem to compress the eigenvectors.
+
+Additionally, since these experiments were run using a simple cube domain, for at least one dimension of the data, there is correlation between neighboring entries. Even with this benefit, the data reduction is fairly modest. We then repeated the compression experiment using a sphere geometry where zfp would see no benefit and the results can be seen in figures ? and ?.
+
+{\color{blue} <Data Reduction: Sphere, Strategy 1> }
+
+{\color{blue} <Data Reduction: Sphere, Strategy 2> }

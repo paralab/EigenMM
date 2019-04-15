@@ -1,5 +1,41 @@
-{\color{blue} \noindent <Define fractional poisson problem> }
+Fractional operators are inherently non-local by definition and is partially why they are of interest. Because of this non-local property, typical approaches for solving fractional PDEs can be untenable or become more computationally expensive. For instance, one of the benefits of finite element methods for solving PDEs is that they result in sparse systems to be solved. Unfortunately, for fractional problems, FEM discretization results in a system becomes fully dense, making it a much more computationally expensive approach.
 
-{\color{blue} \noindent <Define spectral approach to solving fractional poisson problem> }
+The model problem we use to verify the correctness of the eigenfunction expansion approach is the simple fractional poisson problem with zero dirichlet boundary conditions, as seen in equation \eqref{eq:model}. One of the benefits of this model problem is its simplicity and that it has some explicit solutions that can aid in the verification of our approach.
 
-{\color{blue} \noindent <Describe non-local nature of fractional properties and what aspects can and can not be captured by the spectral approach> }
+\begin{equation}
+\label{eq:model}
+\begin{tabular}{ccccccc}
+& $-\Delta$u & = & f &  & & $\in \Omega$ \\
+& u & = & 0 &  &  & $ \in \partial \Omega$
+\end{tabular} 
+\end{equation}
+
+If we are going to have to solve a dense $N$ by $N$ system every time we want to solve a fractional poisson problem, then it is perhaps a better idea to avoid FEM and instead utilize an alternative approach. One such alternative approach is the method of eigenfunction expansion. 
+
+One description of this method, and further background details, can be found in \cite{flaplacian}. For a bounded domain with zero dirichlet boundary condition, the fractional laplacian with respect to $ \alpha $ is equivalent to the expansion seen in equation \eqref{eq:spec_expand}.
+
+\begin{equation}
+\label{eq:spec_expand}
+-(\Delta)^{\alpha/2} u(x) \approx \sum_{k=1}^{\infty} \lambda_k^{\alpha/2} (u, v_k) v_k
+\end{equation}
+
+By expanding the function $f$ in the model problem \eqref{eq:model} and plugging in the expansion for $ -(\Delta)^{\alpha/2} $, the solution $u$ can then be obtained as seen in equation \eqref{eq:spec_solve}.
+
+\begin{equation}
+\label{eq:spec_solve}
+u \approx \sum_{k=1}^{\infty} \lambda_k^{-\alpha/2} (f, v_k) v_k
+\end{equation}
+
+One of the benefits of this formulation of the solution is that the effect of the fractional operator's parameter $\alpha$ is limited to scaling $\lambda_k$. This means that the eigenfunction $v_k$ and eigenvalue $\lambda_k$ are simply those of the typical Laplace eigenvalue problem with zero dirichlet boundary condition, specifically those that solve equation \eqref{eq:eig_problem}. 
+
+\begin{equation}
+\label{eq:eig_problem}
+\begin{tabular}{ccccccc}
+& $-\Delta v_k $ & = & $ \lambda_k v_k $ &  & & $\in \Omega$ \\
+& $v_k$ & = & 0 &  &  & $ \in \partial \Omega$
+\end{tabular} 
+\end{equation}
+
+Since this is the typical Laplace eigenvalue problem, we can use existing techniques to produce a discretized system to be solved for as many eigenpairs as we need. Since the purpose of this framework is to be used to study fractional problems of all kinds, we specifically solve for the full set of discretized eigenpairs which comes with specific challenges for taking full advantage of available computing resources.
+
+Another of the benefits of this approach is that instead of solving an $N$ by $N$ system, we can compute the solution by applying the discrete eigenbasis $V$ to the vector of scaled coefficients $\lambda$. Additionally, since many of the coefficients will result in a contribution that is so small that it won't have any measurable impact, many of the columns of $V$ can be ignored depending on the input. 

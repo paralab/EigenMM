@@ -1,0 +1,28 @@
+\begin{tikzpicture}
+\begin{loglogaxis} [xlabel=Number of Nodes, ylabel=Time Elapsed (hours), log ticks with fixed point, xtick = {1,2,3,4}, ymax = 100]
+\addplot[color=red, mark=x] coordinates {
+(1, 0.0696913636111111)
+(2, 0.0418443866666667)
+(3, 0.0385055244444444)
+(4, 0.0279569738888889)
+};
+\addlegendentry{n = 20}\addplot[color=green, mark=x] coordinates {
+(1, 0.3653069425000000)
+(2, 0.1841394594444444)
+(3, 0.1407181208333333)
+(4, 0.1133450255555556)
+};
+\addlegendentry{n = 30}\addplot[color=blue, mark=x] coordinates {
+(1, 1.9314824902777779)
+(2, 1.0242012847222222)
+(3, 0.7066568988888889)
+(4, 0.6199479344444444)
+};
+\addlegendentry{n = 40}\addplot[color=black, mark=x] coordinates {
+(1, 8.3164149672222223)
+(2, 4.2385486824999994)
+(3, 2.9037166197222226)
+(4, 2.4406479241666670)
+};
+\addlegendentry{n = 50}\end{loglogaxis}
+\end{tikzpicture}

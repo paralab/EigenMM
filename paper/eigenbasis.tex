@@ -1,53 +1,86 @@
-{\color{blue} \noindent <Justify need for full eigenbasis> }
+In order to compute solutions to our fractional model problem, the method of eigenfunction expansion requires the computation of the discrete eigenbasis for a given geometry. Since scalability is the primary computational concern for this framework, we build our framework on top of PETSc \cite{petsc-efficient} \cite{petsc-user-ref} and SLEPc \cite{slepc}. PETSc is a parallel and scalable library of routines and data structures for scientific applications. PETSc handles how our matrices are stored in parallel and for operations like matrix multiplication. 
+
+Since our framework is built in the method of eigenfunction expansion, we build on top of the SLEPc library for solving the resulting eigenvalue problem. SLEPc has a number of routines available for solving eigenvalue problems and is also built on PETSc. Our approach requires computing the full set of eigenpairs for a system and therefore our framework uses a modified version of spectrum slicing with the independent eigenvalue problems being solved with SLEPc.
+
+{\color{red} \noindent <Introduce Nektar++, expand nektar++ integration description, cite \cite{nektarpp}> }
 
 \subsection{Method}
 
-{\color{red} \noindent <Describe discretization using Nektar++ to get stiffness and mass matrices> }
+In order to construct solutions to the fractional poisson problem, we need to discretize the domain of interest. Using the finite element method, geometry can be converted into the symmetric, discrete system $ Kv_k = \lambda_k M v_k $. For this, we have integerated our framework with Nektar++ which is used to convert a given mesh into two PETSc matrices $K$ and $M$.
 
-{\color{blue} \noindent <Describe usage of SLEPc to solve for all eigenpairs within a given interval> }
-
-{\color{blue} \noindent <Motivate need for spectrum slicing> }
+Equipped with these matrices, we can compute all of the eigenpairs in a given interval using SLEPc's Krylov-Schur solver. Krylov-Schur is an iterative solver that relies on applying $K$ and $M$ repeatedly and solving related systems. If we were to simply give $K$ and $M$ to SLEPc, these sparse  matrices would be divided among the entire set of available processes. Using this naive approach, throwing more processes at the problem will just result in more communication between nodes and will hurt performance. Instead, we use an approach to split the full eigenbasis computation into independent subproblems that can be handled by a single node. This results in a much more scalable approach.
 
 \subsubsection{Spectrum Slicing}
 
-{\color{blue} \noindent <Describe spectrum slicing as a method to break the full eigenbasis computation into independent partial eigenbasis computations> }
+In order to compute the full set of eigenpairs using the available computing resources, we use the method of spectrum slicing. Because we know the eigenvalue problem is symmetric, all of the eigenvalues are real, and because the problem is semidefinite, all of the eigenvalues are contained in the interval $[0,U]$. Instead of solving for all eigenpairs within this interval using all processes, we break it into independent subintervals that can be solved in parallel. This is possible, again, due to the symmetry of the problem. 
 
-{\color{blue} \noindent <Motivate need for our communication hierarchy> }
+For a symmetric system, if any two eigenvectors have different eigenvalues, they are inherently orthogonal. Therefore any eigenvectors that are in separate subintervals can be solved for independently without any need for orthogonalization between subintervals.
 
-{\color{blue} \noindent <Define evaluator> }
+Each subinterval is solved by a group of processes we refer to as an evaluator. Each evaluator is comprised of a number of nodes that is determined based on problem size and then each node is broken up into its component processes. This communication hierarchy ensures that each evaluator's system is spread out across as few nodes as possible, resulting in minimal communication when applying the discretized operators.
 
-{\color{blue} \noindent <Describe load imbalance that occurs if total interval is divided evenly among evaluators> }
+For this approach, we then needed some method for breaking the interval into subintervals that require equal amounts of work to solve. If we were to instead assume that the eigenvalues are equally distributed and then split the interval evenly among evaluators, very bad load imbalance occurs. The worst case of this load imbalance occurs using this naive splitting with two evaluators. For a simple cube domain, the lower half of the interval contains the vast majority of eigenvalues, and therefore the second evaluator has almost no work to do.
 
-{\color{blue} \noindent <Describe round-robin distribution of subintervals to available evaluators> }
+One potential way of making this assumption of uniformly distributed eigenvalues work as a splitting method is to split the interval into a large number of subintervals per evaluator and then distribute them in a round-robin fashion. This approach does reduce the load imbalance to some extent but isn't reliable. We did end up using some ideas from this, specifically having many subintervals per evaluator distributed in a round-robin fashion. This idea was helpful so that no single evaluator had all of their subintervals in a region that is very sparse.
 
 \subsubsection{Counting an Interval}
 
-{\color{blue} \noindent <Describe exact counting technique> }
+In order to count how many eigenvalues are contained in an interval [a,b], there are two techniques that we explored. Both approaches are based on counting the number of eigenvalues greater than $a$ and then the number greater than $b$ and taking the difference to get the interval count. 
 
-{\color{blue} \noindent <Describe approximate counting technique> }
+Given some matrix $A$ that can be factored such that $A = LDL^T$, where L is a lower triangular matrix and D is a diagonal matrix, the Sylvester inertia theorem states that the inertia of $D$ and $A$ are the same. This means that the number of entries of $D$ that are greater than 0 is also the number of eigenvalues of $A$ that are greater than 0. Therefore if we let $A$ be the shifted eigenvalue problem centered around $a$, specifically that $A = K - aM$, we can compute this factorization to get the number of eigenvalues greater than some given value of $a$.
 
-\subsubsection{Post-Processing and Orthogonalization}
+While this method results in very accurate eigenvalue counts, it becomes prohibitively expensive as the size of the problem increases. Therefore an approximate counting technique was required to find a balance between accuracy and scaling complexity. For this, we use a method called polynomial expansion filtering. 
 
-{\color{blue} \noindent <Describe post-processing orthogonalization step> }
+This approach, which is outline in full detail in \cite{eigcount}, relies on two separate approximations that are composed together. The first bit of machinery is that of approximating the trace of a matrix using $n_v$ random vectors. Specifically, this approximation can be seen in equation \eqref{eq:trace}.
 
-{\color{blue} \noindent <Give complexity estimate for post-processing step and justify> }
+\begin{equation}
+\label{eq:trace}
+\text{tr}(A) \approx \frac{1}{n_v} \sum_{k=1}^{n_v} v_k^TAv_k
+\end{equation}
+
+The approximate count of eigenvalues in an interval is computed by approximating the trace of the eigenprojector of $A$, which is referred to as $P$. The second bit of machinery is that of approximating this eigenproject $P$ by polynomial expansion filtering as seen in equation \eqref{eq:polyfilter}. By plugging the matrix $A$ into the chebyshev expansion of degree $p$ of the heaviside function centered at 0, an approximate form of $P$ is constructed.
+
+\begin{equation}
+\label{eq:polyfilter}
+	P \approx \phi_p(A) = \sum_{j=0}^{p} \gamma_j T_j(A)
+\end{equation}
+
+For the generalized eigenvalue problem we are attempting to solve, the count of eigenvalues in an interval $[a,b]$ is then the difference of the counts for the two shifted systems $K-aM$ and $K-bM$. Specifically, this can be seen in equation \eqref{eq:eigapprox}.
+
+\begin{equation}
+\label{eq:eigapprox}
+	\mu_{[a,b]} = \mu_a - \mu_b \approx \text{tr}[\phi_p (K-aM) - \phi_p (K-bM)]
+\end{equation}
 
 \subsection{Results}
 
-{\color{blue} \noindent <Linear relationship between number of eigenvalues in an interval and the time it takes to solve that interval> }
+One of the main assumptions that determine the load balancing of the spectrum slicing approach is that if two independent subintervals have an equal number of eigenvalues, that they take equal amounts of time to solve. Some of the early experiments with the approximate eigenvalue counting technique resulted in very uneven distribution of eigenvalues per subinterval. However, using the data from these experiments, we plotted each subinterval's solve time and eigenvalue count and can be seen in figure \ref{fig:solvetime_vs_count}. From this it can be seen there is a very distinct linear relationship between the eigenvalue count and solve time.
 
-{\color{blue} \noindent <Performance scaling with respect to number of evaluators (up to the maximum I have access to on rmacc-summit) and problem size> }
+\begin{figure}
+	\caption{Comparison of number of eigenvalues within a subinterval and the amount of time taken to solve for all eigenpairs within the subinterval. Observe the clear linear relationship between the two values.}
+	\label{fig:solvetime_vs_count}
+	\input{figures/solvetime_vs_count}
+\end{figure}
 
-{\color{blue} \noindent <Orthogonality results without post-processing> }
+In order to verify that our method results in near-optimal load balancing, we ran the eigenbasis computation for a range of problem sizes and number of evaluators. These experiments were run on the <Institution 1>'s <Cluster 1> computing cluster with 28 processes per node and a single node per evaluator. The results of this scaling experiment can be seen in figure \ref{fig:scaling}.
 
-{\color{blue} \noindent <Load imbalance results with respect to number of subproblems per evaluator> }
+\begin{figure}
+	\caption{The time it takes to compute the full eigenbasis for various problem sizes vs the number of nodes used.}
+	\label{fig:scaling}
+	\input{figures/scaling_4_log}
+\end{figure}
+
+Since the total eigenbasis computation is divided into smaller independent tasks, one way to determine load balancing is to observe the scaling efficiency per number of evaluators. For $p$ evaluators, the scaling efficiency is then equal to $t_1 / (p\cdot t_p) $, where $t_1$ is the time elapsed for a single evaluator and $t_p$ is the maximum time elapsed for all of the $p$ evaluators. The closer this value is to 1, the closer the work is divided perfectly evenly among evaluators. Ideally, this value should be 1 or close to it. The resulting scaling efficiency can then be seen in figure \ref{fig:efficiency}.
+
+\begin{figure}
+	\caption{Scaling efficiency vs problem size with respect to number of nodes.}
+	\label{fig:efficiency}
+	\input{figures/efficiency}
+\end{figure}
 
 {\color{blue} \noindent <Comparison of performance and accuracy of exact and approximate interval counting> }
 
 \subsection{Potential Improvements}
 
-{\color{blue} \noindent <PETSc/SLEPc supported GPU acceleration to take full advantage of available computing resources> }
+Our framework results in close to optimal load balancing for the simple domains we have tested, however, it isn't necessarily guaranteed. We could make better guarantees of the load balancing by designating a single process to maintain a queue of subintervals to be processed. Using this approach, as each evaluator finishes a subinterval, it can report to the task manager and request the next subinterval. This way, the only time any evaluator is starved for work is when there is no more work to be done. 
 
-{\color{blue} \noindent <Describe how even if GPU-accelerated eigenvalue solve sees no performance gain over CPU, it can function as an extra evaluator resulting in further ability to divide work> }
-
-{\color{blue} \noindent <Explain that load imbalance is mostly minimized, however, with the addition of GPU evaluators, it may be necessary to implement a task queue to ensure that an evaluator is only idle if there is no more work available for anyone> }
+Since the newest versions of PETSc have incorporated GPU acceleration, we could then set up GPU evaluators alongside the previously mentioned CPU evaluators. In this case, a task queue would be essential to properly manage the work among the different types of evaluators. Even if the GPU evaluators are not faster than the CPU evaluators, they would be able to function in parallel, thus resulting in an effective evaluator count greater than the actual number of machines available.
