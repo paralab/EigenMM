@@ -478,17 +478,19 @@ void eigen_mm::formEigenbasis(PetscInt neval)
     VecAssemblyBegin(lambda);
     VecAssemblyEnd(lambda);
 
-    if (saveoutput)
+    if (opts.saveoutput)
     {
         PetscViewer viewer;
-        const char *filenameV = opts.output_filepath + "V" + (const char*) N;
+	char filenameV[1024];
+	sprintf(filenameV, "%sV%d", opts.output_filepath, (int)N);
         PetscViewerBinaryOpen(PETSC_COMM_WORLD, filenameV, 
             FILE_MODE_WRITE, &viewer);
         PetscViewerPushFormat(viewer, PETSC_VIEWER_NATIVE);
         MatView(V, viewer);
         PetscViewerDestroy(&viewer);
 
-        const char *filenamelambda = opts.output_filepath + "lambda" + (const char*) N;
+	char filenamelambda[1024];
+	sprintf(filenamelambda, "%slambda%d", opts.output_filepath, (int)N);
         PetscViewerBinaryOpen(PETSC_COMM_WORLD, filenamelambda, 
             FILE_MODE_WRITE, &viewer);
         VecView(lambda, viewer);

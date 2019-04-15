@@ -1,4 +1,5 @@
 #include "eigen_mm.h"
+#include <zfp.h>
 
 void loadMatsFromFile(Mat *K, Mat *M, 
     PetscInt dim, const char *dtype, PetscInt order, 
@@ -33,14 +34,26 @@ int main(int argc, char *argv[])
     options.terse = false;
     options.details = true;
 
-    SlepcInitialize(NULL,NULL,NULL,NULL);
+    SlepcInitialize(&argc,&argv,NULL,NULL);
+
+    // geometry paramters
+    PetscInt dim, nelems, order;
+    char dtype[1024];
+    char output_filepath[1024];
+    PetscOptionsGetInt(NULL, NULL, "-dim", &dim, NULL);
+    PetscOptionsGetInt(NULL, NULL, "-n", &nelems, NULL);
+    PetscOptionsGetInt(NULL, NULL, "-k", &order, NULL);
+    PetscOptionsGetString(NULL, NULL, "-D", dtype, 1024, NULL);
+    sprintf(output_filepath, "/scratch/kingspeak/serial/u0450449/fractional/matrices/%dD/%s/%d/", dim, dtype, order);
+    options.output_filepath = output_filepath;
+    options.saveoutput = true;
 
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
 
     // Load system from file
     PetscPrintf(PETSC_COMM_WORLD, "Loading initial system\n");
-    loadMatsFromFile(&K, &M, 3, "cube", 1, 29);
+    loadMatsFromFile(&K, &M, dim, dtype, order, nelems);
 
     // Compute eigenbasis
     PetscPrintf(PETSC_COMM_WORLD, "Initializing eigenbasis solver\n");
@@ -279,26 +292,31 @@ void checkCompress1(Mat V, double *compress_times, double *decompress_times, dou
         displs[p] = displs[p-1] + localsizes[p-1];
     
     std::vector<PetscReal> vk;
-    if (rank == 0) vk.resize(N);
-    for (int k = 0; k < neval; k++)
+    vk.resize(N);
+    for (int k = 0; k < neval/size; k++)
     {
-        MatGetColumnVector(V, vk_world, k);
-        VecGetArray(vk_world, &vk_local);
-        MPI_Gatherv(vk_local, localsize, MPIU_REAL, &vk[0], 
-            &localsizes[0], &displs[0], MPIU_REAL, 0, 
-            PETSC_COMM_WORLD);
-
-        if (rank == 0)
+        for (int i = 0; i < size; i++)
         {
-            // compress vk
-            double compress_start_time = MPI_Wtime();
-            double reduction = compress1D(&vk[0], N, 1e-14, 0);
-            double compress_stop_time = MPI_Wtime();
-            compress_times[k] = compress_stop_time - compress_start_time;
-            data_reduction[k] = reduction;
+            MatGetColumnVector(V, vk_world, size*k + i);
+            VecGetArray(vk_world, &vk_local);
+            MPI_Gatherv(vk_local, localsize, MPIU_REAL, &vk[0], 
+                &localsizes[0], &displs[0], MPIU_REAL, i, 
+                PETSC_COMM_WORLD);
         }
+
+        // compress vk
+        double compress_start_time = MPI_Wtime();
+        double reduction = compress1D(&vk[0], N, 1e-14, 0);
+        double compress_stop_time = MPI_Wtime();
+        compress_times[size*k+rank] = compress_stop_time - compress_start_time;
+        data_reduction[size*k+rank] = reduction;
+
+        for (int i = 0; i < size; i++)
+        {
+            MPI_Bcast(&compress_times[size*k + i], 1, MPI_DOUBLE, i, PETSC_COMM_WORLD);
+        }
+
         VecRestoreArray(vk_world, &vk_local);
-        MPI_Barrier(PETSC_COMM_WORLD);
     }
 
     // report:
