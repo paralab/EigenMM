@@ -8,34 +8,89 @@
 #include <string>
 #include <iostream>
 #include "mpi.h"
-//#include "zfp.h"
 
 #define __DEBUG1__
 
 #define PI 3.141592653589793238462
 
-struct SolverOptions
+class SolverOptions
 {
-    PetscInt nevt;
-    PetscInt splitmaxiters;
-    PetscInt nodesperevaluator;
-    PetscInt subproblemsperevaluator;
-    PetscInt taskspernode;
-    PetscInt p;
-    PetscInt nv;
-    PetscInt raditers;
-    PetscInt nevaluators;
-    PetscInt totalsubproblems;
-    PetscReal splittol;
-    PetscReal radtol;
-    PetscReal L;
-    PetscReal R;
-    bool terse;
-    bool details;
-    bool debug;
-    bool saveoutput;
-    const char* output_filepath;
+private:
+    PetscInt _nevt = 100;
+    PetscInt _splitmaxiters = 10;
+    PetscInt _nodesperevaluator = 1;
+    PetscInt _subproblemsperevaluator = 16;
+    PetscInt _totalsubproblems = 16;
+    PetscInt _nevaluators = 1;
+    PetscInt _p = 30;
+    PetscInt _nv = 10;
+    PetscInt _raditers = 10;
+    PetscReal _splittol = 1e-3;
+    PetscReal _radtol = 1e-3;
+    PetscReal _L = 0.01;
+    PetscReal _R = 10000.0;
+    bool _terse = false;
+    bool _details = false;
+    bool _debug = false;
+    bool _savelambda = false;
+    bool _saveV = false;
+    const char* _lambda_filepath = "";
+    const char* _V_filepath = "";
+
+public:
+    SolverOptions() {}
+
+    // setters
+    void set_nevt(PetscInt v) { _nevt = v; }
+    void set_splitmaxiters(PetscInt v) { _splitmaxiters = v; }
+    void set_nodesperevaluator(PetscInt v) { _nodesperevaluator = v; }
+    void set_subproblemsperevaluator(PetscInt v) { _subproblemsperevaluator = v; }
+    void set_nevaluators(PetscInt v) { _nevaluators = v; }
+    void set_p(PetscInt v) { _p = v; }
+    void set_nv(PetscInt v) { _nv = v; }
+    void set_raditers(PetscInt v) { _raditers = v; }
+    void set_splittol(PetscReal v) { _splittol = v; }
+    void set_radtol(PetscReal v) { _radtol = v; }
+    void set_L(PetscReal v) { _L = v; }
+    void set_R(PetscReal v) { _R = v; }
+    void set_terse(bool v) { _terse = v; }
+    void set_details(bool v) { _details = v; }
+    void set_debug(bool v) { _debug = v; }
+    void set_savelambda(bool v, const char* filepath) 
+    {
+        _savelambda = v;
+        _lambda_filepath = filepath; 
+    }
+    void set_saveV(bool v, const char* filepath)
+    {
+        _saveV = v;
+        _V_filepath = filepath;
+    }
+    void set_totalsubproblems(PetscInt v) { _totalsubproblems = v; }
+    
+    // getters
+    PetscInt nevt() { return _nevt; }
+    PetscInt splitmaxiters() { return _splitmaxiters; }
+    PetscInt nodesperevaluator() { return _nodesperevaluator; }
+    PetscInt subproblemsperevaluator() { return _subproblemsperevaluator; }
+    PetscInt nevaluators() { return _nevaluators; }
+    PetscInt p() { return _p; }
+    PetscInt nv() { return _nv; }
+    PetscInt raditers() { return _raditers; }
+    PetscReal splittol() { return _splittol; }
+    PetscReal radtol() { return _radtol; }
+    PetscReal L() { return _L; }
+    PetscReal R() { return _R; }
+    bool terse() { return _terse; }
+    bool details() { return _details; }
+    bool debug() { return _debug; }
+    bool savelambda() { return _savelambda; }
+    bool saveV() { return _saveV; }
+    const char* lambda_filepath() { return _lambda_filepath; }
+    const char* V_filepath() { return _V_filepath; }
+    PetscInt totalsubproblems() { return _totalsubproblems; }
 };
+
 struct NodeInfo
 {
     // world
@@ -50,7 +105,7 @@ struct NodeInfo
     MPI_Comm rowcomm;
 
     // additional properties
-    PetscInt processes_per_node, taskspernode, nevaluators;
+    PetscInt nevaluators;
     PetscViewer viewer;
 
     // Results
@@ -84,7 +139,7 @@ public:
     eigen_mm();
     ~eigen_mm();
 
-    int init(Mat &K_in, Mat &M_in, SolverOptions opt);
+    int init(Mat &K_in, Mat &M_in, SolverOptions *opt);
     Mat& getK();
     Mat& getM();
     int solve(Mat *V_out, Vec *lambda_out);
@@ -113,7 +168,8 @@ public:
     PetscInt solveSubProblem(PetscReal a, PetscReal b, int job);
     void splitSubProblem(PetscReal a, PetscReal b, PetscReal *c, 
         PetscInt *out_ec_left, PetscInt *out_ec_right);
-    PetscInt computeDev(PetscReal a, PetscReal U, PetscBool rl);
+    PetscInt computeDev_approximate(PetscReal a, PetscReal U, PetscBool rl);
+    PetscInt computeDev_exact(PetscReal a, PetscBool rl);
     PetscReal computeRadius(Mat &A);    
     void countInterval(PetscReal a, PetscReal b, PetscInt *count);
 };

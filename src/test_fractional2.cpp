@@ -19,20 +19,10 @@ int main(int argc, char *argv[])
     eigen_mm solver;
 
     // Set up solver paramters
-    options.nevt = 100;
-    options.splitmaxiters = 10;
-    options.nodesperevaluator = 1;
-    options.subproblemsperevaluator = 16;
-    options.taskspernode = 28;
-    options.splittol = 1e-3;
-    options.p = 30;
-    options.nv = 10;
-    options.raditers = 10;
-    options.radtol = 1e-3;
-    options.L = 0.01;
-    options.R = 10000.0;
-    options.terse = false;
-    options.details = true;
+    options.set_p(0);
+    options.set_saveV(true, "/uufs/chpc.utah.edu/common/home/u0450449/Fractional/EigenMM/cube/");
+    options.set_savelambda(true, "/uufs/chpc.utah.edu/common/home/u0450449/Fractional/EigenMM/cube/");
+    options.set_debug(true);
 
     SlepcInitialize(&argc,&argv,NULL,NULL);
 
@@ -44,9 +34,6 @@ int main(int argc, char *argv[])
     PetscOptionsGetInt(NULL, NULL, "-n", &nelems, NULL);
     PetscOptionsGetInt(NULL, NULL, "-k", &order, NULL);
     PetscOptionsGetString(NULL, NULL, "-D", dtype, 1024, NULL);
-    sprintf(output_filepath, "/scratch/kingspeak/serial/u0450449/fractional/matrices/%dD/%s/%d/", dim, dtype, order);
-    options.output_filepath = output_filepath;
-    options.saveoutput = true;
 
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
@@ -57,7 +44,7 @@ int main(int argc, char *argv[])
 
     // Compute eigenbasis
     PetscPrintf(PETSC_COMM_WORLD, "Initializing eigenbasis solver\n");
-    solver.init(K, M, options);
+    solver.init(K, M, &options);
     PetscPrintf(PETSC_COMM_WORLD, "Computing eigenbasis\n");
     solver.solve(&V, &lambda);
 
@@ -70,25 +57,25 @@ int main(int argc, char *argv[])
     // Run compression experiments
     double compress1[neval], decompress1[neval], reduce1[neval];
     double compress2[size],  decompress2[size],  reduce2[size];
-    checkCompress1(V, compress1, decompress1, reduce1, options);
-    checkCompress2(V, compress2, decompress2, reduce2, options);
+    //checkCompress1(V, compress1, decompress1, reduce1, options);
+    //checkCompress2(V, compress2, decompress2, reduce2, options);
 
     // Check accuracy of solution
     PetscReal norms[neval];
     checkCorrectness(K, M, V, lambda, norms, options);
-    checkOrthogonality(M, V, options);
+    //checkOrthogonality(M, V, options);
 
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
     double total_elapsed = end_time - start_time;
 
-    if (options.terse)
+    if (options.terse())
         PetscPrintf(PETSC_COMM_WORLD, "%lf\n", total_elapsed);
     else
         PetscPrintf(PETSC_COMM_WORLD, "Total Elapsed: %lf\n", total_elapsed);
     
 
-    if (options.details)
+    if (options.details())
     {
         // Report
         // compress1
@@ -200,10 +187,10 @@ void checkCorrectness(Mat K, Mat M, Mat V, Vec lambda, PetscReal *norms, SolverO
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
 
-    if (options.terse)
+    if (options.terse())
         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf %lf %lf\n", elapsed, start_time, end_time, (double) minnorm, (double) maxnorm, (double) avgnorm);
     else
-        PetscPrintf(PETSC_COMM_WORLD, "(checkCorrectness) ||A*vk - lambdak*M*vk|| (min/max/avg) = (%lf / %lf / %lf), Elapsed = %lf, Start = %lf, End = %lf\n", (double) minnorm, (double) maxnorm, (double) avgnorm, elapsed, start_time, end_time);
+        PetscPrintf(PETSC_COMM_WORLD, "(checkCorrectness) ||A*vk - lambdak*M*vk|| (min/max/avg) = (%.16lf / %.16lf / %.16lf), Elapsed = %lf, Start = %lf, End = %lf\n", (double) minnorm, (double) maxnorm, (double) avgnorm, elapsed, start_time, end_time);
 
     //*out_norms = &norms[0];
 }
@@ -242,7 +229,7 @@ void checkOrthogonality(Mat M, Mat V, SolverOptions options)
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
 
-    if (options.terse)
+    if (options.terse())
         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf", elapsed, start_time, end_time, (double) norm);
     else
         PetscPrintf(PETSC_COMM_WORLD, "(Orthogonality Check) ||I - V'*V|| = %lf, Elapsed = %lf, Start = %lf, End = %lf\n", (double) norm, elapsed, start_time, end_time);
@@ -360,7 +347,7 @@ void checkCompress1(Mat V, double *compress_times, double *decompress_times, dou
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
 
-    if (options.terse)
+    if (options.terse())
         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf %lf %lf %lf %lf %lf\n", elapsed, start_time, end_time, min_compress, max_compress, avg_compress, min_reduce, max_reduce, avg_reduce);
     else
     {
@@ -452,7 +439,7 @@ void checkCompress2(Mat V, double *compress_times, double *decompress_times, dou
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
 
-    if (options.terse)
+    if (options.terse())
         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf %lf %lf %lf %lf %lf\n", elapsed, start_time, end_time, min_compress, max_compress, avg_compress, min_reduce, max_reduce, avg_reduce);
     else
     {

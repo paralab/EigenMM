@@ -5,7 +5,6 @@
 #include <ctime>
 #include "mpi.h"
 
-
 typedef unsigned int index_t;
 typedef double value_t;
 
