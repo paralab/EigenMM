@@ -558,6 +558,7 @@ PetscInt eigen_mm::solveSubProblem(PetscReal a, PetscReal b, int job)
     PetscOptionsInsertString(nullptr, "-st_type sinvert");
     PetscOptionsInsertString(nullptr, "-st_ksp_type preonly");
     PetscOptionsInsertString(nullptr, "-st_pc_type cholesky");
+    PetscOptionsInsertString(nullptr, "-st_pc_factor_mat_solver_package mumps");
     PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_13 1");
     PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_14 80");
     EPSCreate(node.comm,&eps);
