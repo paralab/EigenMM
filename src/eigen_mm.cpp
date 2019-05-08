@@ -240,58 +240,153 @@ double* eigen_mm::get_eig_vec_imag(int i){
 
 
 // ==================== World ====================
+// void eigen_mm::findUpperBound()
+// {
+//     MPI_Barrier(PETSC_COMM_WORLD);
+//     double start_time = MPI_Wtime();
+
+//     PetscInt oldp = opts.p();
+//     PetscInt oldnv = opts.nv();
+//     if (oldp > 0)
+//     {
+//         opts.set_p(100);
+//         opts.set_nv(30);
+//     }
+
+//     PetscReal lR;
+//     PetscInt rev, in_rev, iter;
+
+//     iter = 0;
+//     lR = (1 << node.id) * opts.R();
+//     rev = (opts.p() > 0) ? computeDev_approximate(lR, 2*lR, PETSC_TRUE)
+//                          : computeDev_exact(lR, PETSC_TRUE);
+
+//     for (int i = 0; i < node.nevaluators; i++)
+//     {
+//         in_rev = rev;
+//         MPI_Bcast(&in_rev, 1, MPIU_INT, i*node.size, PETSC_COMM_WORLD);
+//         if (in_rev <= 0)
+//         {
+//             lR = (1 << i) * opts.R();
+//             break;
+//         }
+//     }
+//     while(in_rev > 0)
+//     {
+//         iter++;
+//         lR = (1 << (node.id + iter*node.nevaluators)) * opts.R();
+//         rev = (opts.p() > 0) ? computeDev_approximate(lR, 2*lR, PETSC_TRUE)
+//                              : computeDev_exact(lR, PETSC_TRUE);
+//         for (int i = 0; i < node.nevaluators; i++)
+//         {
+//             in_rev = rev;
+//             MPI_Bcast(&in_rev, 1, MPIU_REAL, i*node.size, PETSC_COMM_WORLD);
+//             if(in_rev <= 0) 
+//             {
+//                 lR = (1 << (i + iter*node.nevaluators)) * opts.R();
+//                 break;
+//             }
+//         }
+//     }
+
+//     opts.set_R(lR);
+//     opts.set_p(oldp);
+//     opts.set_nv(oldnv);
+
+//     MPI_Barrier(PETSC_COMM_WORLD);
+//     double end_time = MPI_Wtime();
+//     double elapsed = end_time - start_time;
+
+//     // report findUpperBound timing
+//     if (opts.terse())
+//         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf\n", elapsed, start_time, end_time, (double) lR);
+//     else
+//         PetscPrintf(PETSC_COMM_WORLD, "(findUpperBound) Elapsed: %lf, Start: %lf, End: %lf, Upper Bound: %lf\n", elapsed, start_time, end_time, (double) lR);
+// }
 void eigen_mm::findUpperBound()
 {
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
 
-    PetscInt oldp = opts.p();
-    PetscInt oldnv = opts.nv();
-    if (oldp > 0)
-    {
-        opts.set_p(100);
-        opts.set_nv(30);
-    }
-
     PetscReal lR;
-    PetscInt rev, in_rev, iter;
 
-    iter = 0;
-    lR = (1 << node.id) * opts.R();
-    rev = (opts.p() > 0) ? computeDev_approximate(lR, 2*lR, PETSC_TRUE)
-                         : computeDev_exact(lR, PETSC_TRUE);
+    if (node.id == 0)
+    {
+        Mat F;
+        KSP ksp;
+        PC pc;
+        Vec x, Sx, b;
+        PetscRandom r;
+        PetscReal e, e0, normx, normsx;
+        PetscInt N, iter;
 
-    for (int i = 0; i < node.nevaluators; i++)
-    {
-        in_rev = rev;
-        MPI_Bcast(&in_rev, 1, MPIU_INT, i*node.size, PETSC_COMM_WORLD);
-        if (in_rev <= 0)
+        KSPCreate(node.comm, &ksp);
+        KSPSetOperators(ksp, M, M);
+        KSPSetType(ksp, KSPPREONLY);
+        KSPGetPC(ksp, &pc);
+        PCSetType(pc, PCCHOLESKY);
+        PCFactorSetMatSolverPackage(pc, MATSOLVERMUMPS);
+        PCFactorSetUpMatSolverPackage(pc);
+        PCFactorGetMatrix(pc, &F);
+        MatMumpsSetIcntl(F, 13, 1);
+        MatMumpsSetIcntl(F, 14, 80);
+
+        PetscRandomCreate(node.comm, &r);
+        PetscRandomSetType(r, PETSCRAND);
+        PetscRandomSetInterval(r, -1, 1);
+
+        MatGetSize(K, &N, NULL);
+        VecCreateMPI(node.comm, PETSC_DECIDE, N, &x);
+        VecCreateMPI(node.comm, PETSC_DECIDE, N, &Sx);
+        VecCreateMPI(node.comm, PETSC_DECIDE, N, &b);
+
+        // initialize v (stored in Sx)
+        VecSetRandom(x, r);
+        VecCopy(x, Sx);
+        VecAbs(Sx);
+        VecPointwiseDivide(Sx, x, Sx);
+        
+        // x = abs( A' * Sx );
+        // x = abs( K * (M \ Sx) );
+        KSPSolve(ksp, Sx, b);
+        MatMult(K, b, x);
+        VecAbs(x);
+        
+        VecNorm(x, NORM_2, &e);
+        VecScale(x, 1/e);
+        e0 = 0;
+        iter = 1;
+        while (abs(e - e0) > opts.radtol()*e && iter <= opts.raditers())
         {
-            lR = (1 << i) * opts.R();
-            break;
+            e0 = e;
+            // Sx = A * x
+            // Sx = M \ (K * x)
+            MatMult(K, x, b);
+            KSPSolve(ksp, x, Sx);
+
+            // x = A' * Sx
+            // x = K * (M \ Sx)
+            KSPSolve(ksp, Sx, b);
+            MatMult(K, b, x);
+
+            VecNorm(x, NORM_2, &normx);
+            VecNorm(Sx, NORM_2, &normsx);
+            e = normx / normsx;
+            VecScale(x, 1/normx);
+            
+            iter++;
         }
+
+        lR = 1.1*e;
+
+        VecDestroy(&x);
+        VecDestroy(&Sx);
+        VecDestroy(&b);
+        KSPDestroy(&ksp);
     }
-    while(in_rev > 0)
-    {
-        iter++;
-        lR = (1 << (node.id + iter*node.nevaluators)) * opts.R();
-        rev = (opts.p() > 0) ? computeDev_approximate(lR, 2*lR, PETSC_TRUE)
-                             : computeDev_exact(lR, PETSC_TRUE);
-        for (int i = 0; i < node.nevaluators; i++)
-        {
-            in_rev = rev;
-            MPI_Bcast(&in_rev, 1, MPIU_REAL, i*node.size, PETSC_COMM_WORLD);
-            if(in_rev <= 0) 
-            {
-                lR = (1 << (i + iter*node.nevaluators)) * opts.R();
-                break;
-            }
-        }
-    }
+    MPI_Bcast(&lR, 1, MPIU_REAL, 0, PETSC_COMM_WORLD);
 
     opts.set_R(lR);
-    opts.set_p(oldp);
-    opts.set_nv(oldnv);
 
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
