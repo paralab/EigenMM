@@ -197,29 +197,14 @@ void eigen_mm::print_eig_vec(int ran){
 
 int eigen_mm::viewK(){
 
-    if (node.id == 0)
-    {
-        PetscViewer viewer;
-        PetscViewerDrawOpen(node.comm, 0, "", 300, 0, 1000, 1000, &viewer);
-        PetscViewerDrawSetPause(viewer, -1);
-        MatView(K, viewer);
-        PetscViewerDestroy(&viewer);
-    }
+    if (node.id == 0) MatView(K, node.viewer);
 
     return 0;
 }
 
 int eigen_mm::viewM(){
 
-    if (node.id == 0)
-    {
-        PetscViewer viewer;
-        PetscViewerDrawOpen(node.comm, 0, "", 300, 0, 1000, 1000, &viewer);
-        PetscViewerDrawSetPause(viewer, -1);
-        MatView(M, viewer);
-        PetscViewerDestroy(&viewer);
-    }
-
+    if (node.id == 0) MatView(M, node.viewer);
     return 0;
 }
 
