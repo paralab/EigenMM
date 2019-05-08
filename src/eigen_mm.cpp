@@ -197,22 +197,28 @@ void eigen_mm::print_eig_vec(int ran){
 
 int eigen_mm::viewK(){
 
-    PetscViewer viewer;
-    PetscViewerDrawOpen(PETSC_COMM_WORLD, 0, "", 300, 0, 1000, 1000, &viewer);
-    PetscViewerDrawSetPause(viewer, -1);
-    MatView(K, viewer);
-    PetscViewerDestroy(&viewer);
+    if (node.id == 0)
+    {
+        PetscViewer viewer;
+        PetscViewerDrawOpen(node.comm, 0, "", 300, 0, 1000, 1000, &viewer);
+        PetscViewerDrawSetPause(viewer, -1);
+        MatView(K, viewer);
+        PetscViewerDestroy(&viewer);
+    }
 
     return 0;
 }
 
 int eigen_mm::viewM(){
 
-    PetscViewer viewer;
-    PetscViewerDrawOpen(PETSC_COMM_WORLD, 0, "", 300, 0, 1000, 1000, &viewer);
-    PetscViewerDrawSetPause(viewer, -1);
-    MatView(M, viewer);
-    PetscViewerDestroy(&viewer);
+    if (node.id == 0)
+    {
+        PetscViewer viewer;
+        PetscViewerDrawOpen(node.comm, 0, "", 300, 0, 1000, 1000, &viewer);
+        PetscViewerDrawSetPause(viewer, -1);
+        MatView(M, viewer);
+        PetscViewerDestroy(&viewer);
+    }
 
     return 0;
 }
@@ -240,69 +246,6 @@ double* eigen_mm::get_eig_vec_imag(int i){
 
 
 // ==================== World ====================
-// void eigen_mm::findUpperBound()
-// {
-//     MPI_Barrier(PETSC_COMM_WORLD);
-//     double start_time = MPI_Wtime();
-
-//     PetscInt oldp = opts.p();
-//     PetscInt oldnv = opts.nv();
-//     if (oldp > 0)
-//     {
-//         opts.set_p(100);
-//         opts.set_nv(30);
-//     }
-
-//     PetscReal lR;
-//     PetscInt rev, in_rev, iter;
-
-//     iter = 0;
-//     lR = (1 << node.id) * opts.R();
-//     rev = (opts.p() > 0) ? computeDev_approximate(lR, 2*lR, PETSC_TRUE)
-//                          : computeDev_exact(lR, PETSC_TRUE);
-
-//     for (int i = 0; i < node.nevaluators; i++)
-//     {
-//         in_rev = rev;
-//         MPI_Bcast(&in_rev, 1, MPIU_INT, i*node.size, PETSC_COMM_WORLD);
-//         if (in_rev <= 0)
-//         {
-//             lR = (1 << i) * opts.R();
-//             break;
-//         }
-//     }
-//     while(in_rev > 0)
-//     {
-//         iter++;
-//         lR = (1 << (node.id + iter*node.nevaluators)) * opts.R();
-//         rev = (opts.p() > 0) ? computeDev_approximate(lR, 2*lR, PETSC_TRUE)
-//                              : computeDev_exact(lR, PETSC_TRUE);
-//         for (int i = 0; i < node.nevaluators; i++)
-//         {
-//             in_rev = rev;
-//             MPI_Bcast(&in_rev, 1, MPIU_REAL, i*node.size, PETSC_COMM_WORLD);
-//             if(in_rev <= 0) 
-//             {
-//                 lR = (1 << (i + iter*node.nevaluators)) * opts.R();
-//                 break;
-//             }
-//         }
-//     }
-
-//     opts.set_R(lR);
-//     opts.set_p(oldp);
-//     opts.set_nv(oldnv);
-
-//     MPI_Barrier(PETSC_COMM_WORLD);
-//     double end_time = MPI_Wtime();
-//     double elapsed = end_time - start_time;
-
-//     // report findUpperBound timing
-//     if (opts.terse())
-//         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf\n", elapsed, start_time, end_time, (double) lR);
-//     else
-//         PetscPrintf(PETSC_COMM_WORLD, "(findUpperBound) Elapsed: %lf, Start: %lf, End: %lf, Upper Bound: %lf\n", elapsed, start_time, end_time, (double) lR);
-// }
 void eigen_mm::findUpperBound()
 {
     MPI_Barrier(PETSC_COMM_WORLD);
