@@ -6,6 +6,8 @@
 
 #include <vector>
 #include <string>
+#include <fstream>
+#include <iterator>
 #include <iostream>
 #include "mpi.h"
 
@@ -32,8 +34,10 @@ private:
     bool _terse = false;
     bool _details = false;
     bool _debug = false;
+    bool _savecorrectness = false;
     bool _savelambda = false;
     bool _saveV = false;
+    const char* _correctness_filepath = "";
     const char* _lambda_filepath = "";
     const char* _V_filepath = "";
 
@@ -56,6 +60,11 @@ public:
     void set_terse(bool v) { _terse = v; }
     void set_details(bool v) { _details = v; }
     void set_debug(bool v) { _debug = v; }
+    void set_savecorrectness(bool v, const char* filepath)
+    {
+        _savecorrectness = v;
+        _correctness_filepath = filepath;
+    }
     void set_savelambda(bool v, const char* filepath) 
     {
         _savelambda = v;
@@ -84,8 +93,10 @@ public:
     bool terse() { return _terse; }
     bool details() { return _details; }
     bool debug() { return _debug; }
+    bool savecorrectness() { return _savecorrectness; }
     bool savelambda() { return _savelambda; }
     bool saveV() { return _saveV; }
+    const char* correctness_filepath() { return _correctness_filepath; }
     const char* lambda_filepath() { return _lambda_filepath; }
     const char* V_filepath() { return _V_filepath; }
     PetscInt totalsubproblems() { return _totalsubproblems; }
@@ -126,6 +137,7 @@ private:
     std::vector<PetscReal> intervals;
     std::vector<PetscReal> lambda_data;
     std::vector<PetscReal> lv_data;
+    std::vector<PetscReal> residuals;
     unsigned int eig_num = 0; // number of computed eigenvaleus.
 
 public:
@@ -143,6 +155,7 @@ public:
     Mat& getK();
     Mat& getM();
     int solve(Mat *V_out, Vec *lambda_out);
+    int solve_simple(Mat &K_in, Mat &M_in, Mat *V_out, Vec *lambda_out, SolverOptions *opt);
     void print_eig_val_real();
     void print_eig_val_imag();
     void print_eig_val();
@@ -159,6 +172,10 @@ public:
     double* get_eig_vec_real(int i);
     double* get_eig_vec_imag(int i);
 
+    void checkCorrectness();
+    void checkOrthogonality();
+
+    void findUpperBound_simple(Mat &K_in, Mat &M_in);
     void findUpperBound();
     void formSubproblems();
     PetscInt solveSubproblems();
