@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<EIGEN_MM>
+    <OPTIONS 
+	_nevt="100" 
+	_splitmaxiters="10" 
+	_nodesperevaluator="16" 
+	_subproblemsperevaluator="16" 
+	_totalsubproblems="16" 
+	_nevaluators="1" 
+	_p="30" 
+	_nv="10" 
+	_raditers="10" 
+	_splittol="1e-3" 
+	_radtol="1e-3" 
+	_L="0.01" 
+	_R="10000.0" 
+	_terse="false" 
+	_details="false" 
+	_debug="false" 
+	_savelambda="false"
+	_saveV="false"
+	_lambda_filepath="" 
+	_V_filepath=""/>
+</EIGEN_MM>
