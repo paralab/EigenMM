@@ -20,8 +20,9 @@ int main(int argc, char *argv[])
 
     // Set up solver paramters
     options.set_p(0);
-    options.set_saveV(true, "/uufs/chpc.utah.edu/common/home/u0450449/Fractional/EigenMM/cube/");
+    //options.set_saveV(true, "/uufs/chpc.utah.edu/common/home/u0450449/Fractional/EigenMM/cube/");
     options.set_savelambda(true, "/uufs/chpc.utah.edu/common/home/u0450449/Fractional/EigenMM/cube/");
+    options.set_savecorrectness(true, "/uufs/chpc.utah.edu/common/home/u0450449/Fractional/EigenMM/correctness/");
     options.set_debug(true);
 
     SlepcInitialize(&argc,&argv,NULL,NULL);
@@ -48,21 +49,21 @@ int main(int argc, char *argv[])
     PetscPrintf(PETSC_COMM_WORLD, "Computing eigenbasis\n");
     solver.solve(&V, &lambda);
 
-    PetscInt N, neval;
-    MatGetSize(V, &N, &neval);
+    // PetscInt N, neval;
+    // MatGetSize(V, &N, &neval);
 
-    int size;
-    MPI_Comm_size(PETSC_COMM_WORLD, &size);
+    // int size;
+    // MPI_Comm_size(PETSC_COMM_WORLD, &size);
 
     // Run compression experiments
-    double compress1[neval], decompress1[neval], reduce1[neval];
-    double compress2[size],  decompress2[size],  reduce2[size];
+    //double compress1[neval], decompress1[neval], reduce1[neval];
+    //double compress2[size],  decompress2[size],  reduce2[size];
     //checkCompress1(V, compress1, decompress1, reduce1, options);
     //checkCompress2(V, compress2, decompress2, reduce2, options);
 
     // Check accuracy of solution
-    PetscReal norms[neval];
-    checkCorrectness(K, M, V, lambda, norms, options);
+    //PetscReal norms[neval];
+    //checkCorrectness(K, M, V, lambda, norms, options);
     //checkOrthogonality(M, V, options);
 
     MPI_Barrier(PETSC_COMM_WORLD);
@@ -75,34 +76,34 @@ int main(int argc, char *argv[])
         PetscPrintf(PETSC_COMM_WORLD, "Total Elapsed: %lf\n", total_elapsed);
     
 
-    if (options.details())
-    {
-        // Report
-        // compress1
-        for (int i = 0; i < neval; i++)
-            PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", compress1[i]);
-        PetscPrintf(PETSC_COMM_WORLD, "\n");
+    // if (options.details())
+    // {
+    //     // Report
+    //     // compress1
+    //     for (int i = 0; i < neval; i++)
+    //         PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", compress1[i]);
+    //     PetscPrintf(PETSC_COMM_WORLD, "\n");
 
-        // reduce1
-        for (int i = 0; i < neval; i++)
-            PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", reduce1[i]);
-        PetscPrintf(PETSC_COMM_WORLD, "\n");
+    //     // reduce1
+    //     for (int i = 0; i < neval; i++)
+    //         PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", reduce1[i]);
+    //     PetscPrintf(PETSC_COMM_WORLD, "\n");
 
-        // compress2
-        for (int i = 0; i < size; i++)
-            PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", compress2[i]);
-        PetscPrintf(PETSC_COMM_WORLD, "\n");
+    //     // compress2
+    //     for (int i = 0; i < size; i++)
+    //         PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", compress2[i]);
+    //     PetscPrintf(PETSC_COMM_WORLD, "\n");
 
-        // reduce2
-        for (int i = 0; i < size; i++)
-            PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", reduce2[i]);
-        PetscPrintf(PETSC_COMM_WORLD, "\n");
+    //     // reduce2
+    //     for (int i = 0; i < size; i++)
+    //         PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", reduce2[i]);
+    //     PetscPrintf(PETSC_COMM_WORLD, "\n");
 
-        // correctness
-        for (int i = 0; i < neval; i++)
-            PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", (double) norms[i]);
-        PetscPrintf(PETSC_COMM_WORLD, "\n");
-    }
+    //     // correctness
+    //     // for (int i = 0; i < neval; i++)
+    //     //     PetscPrintf(PETSC_COMM_WORLD, "%.12lf ", (double) norms[i]);
+    //     // PetscPrintf(PETSC_COMM_WORLD, "\n");
+    // }
 
     // Cleanup
     MatDestroy(&K);
