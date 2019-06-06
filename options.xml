@@ -10,7 +10,7 @@
 	_p="30" 
 	_nv="10" 
 	_raditers="10" 
-	_splittol="1e-3" 
+	_splittol="0.9" 
 	_radtol="1e-3" 
 	_L="0.01" 
 	_R="10000.0" 

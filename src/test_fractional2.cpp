@@ -20,6 +20,7 @@ int main(int argc, char *argv[])
 
     // Set up solver paramters
     options.set_p(0);
+    options.set_subproblemsperevaluator(1);
     //options.set_saveV(true, "/uufs/chpc.utah.edu/common/home/u0450449/Fractional/EigenMM/cube/");
     options.set_savelambda(true, "/uufs/chpc.utah.edu/common/home/u0450449/Fractional/EigenMM/cube/");
     options.set_savecorrectness(true, "/uufs/chpc.utah.edu/common/home/u0450449/Fractional/EigenMM/correctness/");
@@ -48,6 +49,7 @@ int main(int argc, char *argv[])
     solver.init(K, M, &options);
     PetscPrintf(PETSC_COMM_WORLD, "Computing eigenbasis\n");
     solver.solve(&V, &lambda);
+    //solver.solve_simple(K, M, &V, &lambda, &options);
 
     // PetscInt N, neval;
     // MatGetSize(V, &N, &neval);
@@ -108,8 +110,8 @@ int main(int argc, char *argv[])
     // Cleanup
     MatDestroy(&K);
     MatDestroy(&M);
-    MatDestroy(&V);
-    VecDestroy(&lambda);
+    //MatDestroy(&V);
+    //VecDestroy(&lambda);
 
     SlepcFinalize();
 

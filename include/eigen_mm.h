@@ -27,7 +27,7 @@ private:
     PetscInt _p = 30;
     PetscInt _nv = 10;
     PetscInt _raditers = 10;
-    PetscReal _splittol = 1e-3;
+    PetscReal _splittol = 0.9;
     PetscReal _radtol = 1e-3;
     PetscReal _L = 0.01;
     PetscReal _R = 10000.0;
@@ -133,6 +133,7 @@ private:
     NodeInfo node;
     MPI_Comm comm = MPI_COMM_WORLD;
     Mat K, M, V;
+    Mat K_global, M_global;
     Vec lambda;
     std::vector<PetscReal> intervals;
     std::vector<PetscReal> lambda_data;
@@ -155,7 +156,6 @@ public:
     Mat& getK();
     Mat& getM();
     int solve(Mat *V_out, Vec *lambda_out);
-    int solve_simple(Mat &K_in, Mat &M_in, Mat *V_out, Vec *lambda_out, SolverOptions *opt);
     void print_eig_val_real();
     void print_eig_val_imag();
     void print_eig_val();
@@ -175,7 +175,6 @@ public:
     void checkCorrectness();
     void checkOrthogonality();
 
-    void findUpperBound_simple(Mat &K_in, Mat &M_in);
     void findUpperBound();
     void formSubproblems();
     PetscInt solveSubproblems();

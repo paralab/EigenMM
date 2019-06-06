@@ -30,8 +30,8 @@ void eigen_mm::checkCorrectness()
     Mat residual, temp;
     MatConvert(V, MATSAME, MAT_INITIAL_MATRIX, &temp);
     MatDiagonalScale(temp, NULL, lambda);
-    MatMatMult(M, temp, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &residual);
-    MatMatMult(K, V, MAT_REUSE_MATRIX, PETSC_DEFAULT, &temp);
+    MatMatMult(M_global, temp, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &residual);
+    MatMatMult(K_global, V, MAT_REUSE_MATRIX, PETSC_DEFAULT, &temp);
     MatAYPX(residual, -1, temp, DIFFERENT_NONZERO_PATTERN);
 
     MatGetColumnNorms(residual, NORM_2, &residuals[0]);
@@ -117,6 +117,9 @@ int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions *opts_in)
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
 
+    K_global = K_in;
+    M_global = M_in;
+
     opts = *opts_in;
 
     // Initialize World Communicator
@@ -184,76 +187,6 @@ int eigen_mm::solve(Mat *V_out, Vec *lambda_out)
         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf\n", elapsed, start_time, end_time);
     else
         PetscPrintf(PETSC_COMM_WORLD, "(solve) Elapsed: %lf, Start: %lf, End: %lf\n", elapsed, start_time, end_time);
-}
-
-int eigen_mm::solve_simple(Mat &K_in, Mat &M_in, Mat *V_out, Vec *lambda_out, SolverOptions *opts_in)
-{
-    MPI_Barrier(PETSC_COMM_WORLD);
-    double start_time = MPI_Wtime();
-
-    opts = *opts_in;
-
-    if (opts.debug()) PetscPrintf(PETSC_COMM_WORLD, "finding upper bound\n");
-    findUpperBound_simple(K_in, M_in);
-
-    if(opts.debug()) PetscPrintf(PETSC_COMM_WORLD, "Solving interval [%lf, %lf]\n", (double)opts.L(), (double)opts.R());
-
-    // Set up solver
-    PetscInt nconv;
-    EPS eps;
-    char subinterval_string[1024] = "";
-    sprintf(subinterval_string, "-eps_interval %lf,%lf", (double)opts.L(), (double)opts.R());
-    PetscOptionsInsertString(nullptr, subinterval_string);
-    PetscOptionsInsertString(nullptr, "-st_type sinvert");
-    PetscOptionsInsertString(nullptr, "-st_ksp_type preonly");
-    PetscOptionsInsertString(nullptr, "-st_pc_type cholesky");
-    PetscOptionsInsertString(nullptr, "-st_pc_factor_mat_solver_package mumps");
-    PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_13 1");
-    PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_14 80");
-    EPSCreate(PETSC_COMM_WORLD,&eps);
-    EPSSetOperators(eps,K_in,M_in);
-    EPSSetProblemType(eps,EPS_GHEP);
-    EPSSetFromOptions(eps);
-
-    // Solve
-    EPSSolve(eps);
-
-    // Process results
-    EPSGetConverged(eps, &nconv); 
-    
-    Vec v;
-    PetscInt N, size;
-    PetscReal lam, *v_data;
-
-    MatGetSize(K_in, &N, NULL);
-    VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, N, &v);
-    VecGetLocalSize(v, &size);
-    for (int i = 0; i < nconv; i++)
-    {
-        EPSGetEigenpair(eps, i, &lam, NULL, v, NULL);
-        lambda_data.push_back(lam);
-        VecGetArray(v, &v_data);
-        for (int j = 0; j < size; j++) lv_data.push_back(v_data[j]);
-        VecRestoreArray(v, &v_data);
-    }
- 
-    // Clean up solver
-    VecDestroy(&v);
-    EPSDestroy(&eps);
-
-    node.neval += nconv;
-
-    (*V_out) = V;
-    (*lambda_out) = lambda;
-
-    MPI_Barrier(PETSC_COMM_WORLD);
-    double end_time = MPI_Wtime();
-    double elapsed = end_time - start_time;
-
-    if (opts.terse())
-        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %d\n", elapsed, start_time, end_time);
-    else
-        PetscPrintf(PETSC_COMM_WORLD, "(solve) Elapsed: %lf, Start: %lf, End: %lf, Found %d eigenvalues\n", elapsed, start_time, end_time, nconv);
 }
 
 Mat& eigen_mm::getK(){
@@ -389,97 +322,6 @@ double* eigen_mm::get_eig_vec_imag(int i){
 
 
 // ==================== World ====================
-void eigen_mm::findUpperBound_simple(Mat &K_in, Mat &M_in)
-{
-    MPI_Barrier(PETSC_COMM_WORLD);
-    double start_time = MPI_Wtime();
-
-    PetscReal lR;
-
-    Mat F;
-    KSP ksp;
-    PC pc;
-    Vec x, Sx, b;
-    PetscRandom r;
-    PetscReal e, e0, normx, normsx;
-    PetscInt N, iter;
-
-    KSPCreate(PETSC_COMM_WORLD, &ksp);
-    KSPSetOperators(ksp, M_in, M_in);
-    KSPSetType(ksp, KSPPREONLY);
-    KSPGetPC(ksp, &pc);
-    PCSetType(pc, PCCHOLESKY);
-    PCFactorSetMatSolverPackage(pc, MATSOLVERMUMPS);
-    PCFactorSetUpMatSolverPackage(pc);
-    PCFactorGetMatrix(pc, &F);
-    MatMumpsSetIcntl(F, 13, 1);
-    MatMumpsSetIcntl(F, 14, 80);
-
-    PetscRandomCreate(PETSC_COMM_WORLD, &r);
-    PetscRandomSetType(r, PETSCRAND);
-    PetscRandomSetInterval(r, -1, 1);
-
-    MatGetSize(K_in, &N, NULL);
-    VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, N, &x);
-    VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, N, &Sx);
-    VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, N, &b);
-
-    // initialize v (stored in Sx)
-    VecSetRandom(x, r);
-    VecCopy(x, Sx);
-    VecAbs(Sx);
-    VecPointwiseDivide(Sx, x, Sx);
-    
-    // x = abs( A' * Sx );
-    // x = abs( K * (M \ Sx) );
-    KSPSolve(ksp, Sx, b);
-    MatMult(K_in, b, x);
-    VecAbs(x);
-    
-    VecNorm(x, NORM_2, &e);
-    VecScale(x, 1/e);
-    e0 = 0;
-    iter = 1;
-    while (abs(e - e0) > opts.radtol()*e && iter <= opts.raditers())
-    {
-        e0 = e;
-        // Sx = A * x
-        // Sx = M \ (K * x)
-        MatMult(K_in, x, b);
-        KSPSolve(ksp, x, Sx);
-
-        // x = A' * Sx
-        // x = K * (M \ Sx)
-        KSPSolve(ksp, Sx, b);
-        MatMult(K_in, b, x);
-
-        VecNorm(x, NORM_2, &normx);
-        VecNorm(Sx, NORM_2, &normsx);
-        e = normx / normsx;
-        VecScale(x, 1/normx);
-        
-        iter++;
-    }
-
-    lR = 1.1*e;
-
-    VecDestroy(&x);
-    VecDestroy(&Sx);
-    VecDestroy(&b);
-    KSPDestroy(&ksp);
-
-    opts.set_R(lR);
-
-    MPI_Barrier(PETSC_COMM_WORLD);
-    double end_time = MPI_Wtime();
-    double elapsed = end_time - start_time;
-
-    // report findUpperBound timing
-    if (opts.terse())
-        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf\n", elapsed, start_time, end_time, (double) lR);
-    else
-        PetscPrintf(PETSC_COMM_WORLD, "(findUpperBound) Elapsed: %lf, Start: %lf, End: %lf, Upper Bound: %lf\n", elapsed, start_time, end_time, (double) lR);
-}
 void eigen_mm::findUpperBound()
 {
     MPI_Barrier(PETSC_COMM_WORLD);
