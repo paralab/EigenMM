@@ -34,12 +34,12 @@ private:
     bool _terse = false;
     bool _details = false;
     bool _debug = false;
-    bool _savecorrectness = false;
-    bool _savelambda = false;
-    bool _saveV = false;
-    const char* _correctness_filepath = "";
-    const char* _lambda_filepath = "";
-    const char* _V_filepath = "";
+    bool _save_correctness = false;
+    bool _save_eigenvalues = false;
+    bool _save_eigenbasis = false;
+    const char* _correctness_filename = "";
+    const char* _eigenvalues_filename = "";
+    const char* _eigenbasis_filename = "";
 
 public:
     SolverOptions() {}
@@ -60,20 +60,20 @@ public:
     void set_terse(bool v) { _terse = v; }
     void set_details(bool v) { _details = v; }
     void set_debug(bool v) { _debug = v; }
-    void set_savecorrectness(bool v, const char* filepath)
+    void set_save_correctness(bool v, const char* filename)
     {
-        _savecorrectness = v;
-        _correctness_filepath = filepath;
+        _save_correctness = v;
+        _correctness_filename = filename;
     }
-    void set_savelambda(bool v, const char* filepath) 
+    void set_save_eigenvalues(bool v, const char* filename) 
     {
-        _savelambda = v;
-        _lambda_filepath = filepath; 
+        _save_eigenvalues = v;
+        _eigenvalues_filename = filename; 
     }
-    void set_saveV(bool v, const char* filepath)
+    void set_save_eigenbasis(bool v, const char* filename)
     {
-        _saveV = v;
-        _V_filepath = filepath;
+        _save_eigenbasis = v;
+        _eigenbasis_filename = filename;
     }
     void set_totalsubproblems(PetscInt v) { _totalsubproblems = v; }
     
@@ -93,12 +93,12 @@ public:
     bool terse() { return _terse; }
     bool details() { return _details; }
     bool debug() { return _debug; }
-    bool savecorrectness() { return _savecorrectness; }
-    bool savelambda() { return _savelambda; }
-    bool saveV() { return _saveV; }
-    const char* correctness_filepath() { return _correctness_filepath; }
-    const char* lambda_filepath() { return _lambda_filepath; }
-    const char* V_filepath() { return _V_filepath; }
+    bool save_correctness() { return _save_correctness; }
+    bool save_lambda() { return _save_eigenvalues; }
+    bool save_eigenbasis() { return _save_eigenbasis; }
+    const char* correctness_filename() { return _correctness_filename; }
+    const char* eigenvalues_filename() { return _eigenvalues_filename; }
+    const char* eigenbasis_filename() { return _eigenbasis_filename; }
     PetscInt totalsubproblems() { return _totalsubproblems; }
 };
 

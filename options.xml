@@ -17,8 +17,10 @@
 	_terse="false" 
 	_details="false" 
 	_debug="false" 
-	_savelambda="false"
-	_saveV="false"
-	_lambda_filepath="" 
-	_V_filepath=""/>
+	_save_correctness="false"
+	_save_eigenvalues="false"
+	_save_eigenbasis="false"
+	_correctness_filename="" 
+	_eigenvalues_filename="" 
+	_eigenbasis_filename=""/>
 </EIGEN_MM>

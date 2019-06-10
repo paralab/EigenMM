@@ -54,11 +54,9 @@ void eigen_mm::checkCorrectness()
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
 
-    if(opts.savecorrectness())
+    if(opts.save_correctness())
     {
-        char filenamecorrectness[1024];
-        sprintf(filenamecorrectness, "%scorrectness%d", opts.correctness_filepath(), (int)N);
-        std::ofstream output_file(filenamecorrectness);
+        std::ofstream output_file(opts.correctness_filename());
         std::ostream_iterator<PetscReal> output_iterator(output_file, "\n");
         std::copy(residuals.begin(), residuals.end(), output_iterator);
     }
@@ -623,23 +621,19 @@ void eigen_mm::formEigenbasis(PetscInt neval)
     VecAssemblyBegin(lambda);
     VecAssemblyEnd(lambda);
 
-    if(opts.savelambda())
+    if(opts.save_eigenvalues())
     {
         PetscViewer viewer;
-        char filenamelambda[1024];
-        sprintf(filenamelambda, "%slambda%d", opts.lambda_filepath(), (int)N);
-        PetscViewerBinaryOpen(PETSC_COMM_WORLD, filenamelambda, 
+        PetscViewerBinaryOpen(PETSC_COMM_WORLD, opts.eigenvalues_filename(), 
             FILE_MODE_WRITE, &viewer);
         VecView(lambda, viewer);
         PetscViewerDestroy(&viewer);
     }
 
-    if(opts.saveV())
+    if(opts.save_eigenbasis())
     {
         PetscViewer viewer;
-        char filenameV[1024];
-        sprintf(filenameV, "%sV%d", opts.V_filepath(), (int)N);
-        PetscViewerBinaryOpen(PETSC_COMM_WORLD, filenameV, 
+        PetscViewerBinaryOpen(PETSC_COMM_WORLD, opts.eigenbasis_filename(), 
             FILE_MODE_WRITE, &viewer);
         PetscViewerPushFormat(viewer, PETSC_VIEWER_NATIVE);
         MatView(V, viewer);

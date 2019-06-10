@@ -21,9 +21,6 @@ int main(int argc, char *argv[])
     // Set up solver paramters
     options.set_p(0);
     options.set_subproblemsperevaluator(1);
-    //options.set_saveV(true, "/uufs/chpc.utah.edu/common/home/u0450449/Fractional/EigenMM/cube/");
-    options.set_savelambda(true, "/uufs/chpc.utah.edu/common/home/u0450449/Fractional/EigenMM/cube/");
-    options.set_savecorrectness(true, "/uufs/chpc.utah.edu/common/home/u0450449/Fractional/EigenMM/correctness/");
     options.set_debug(true);
 
     SlepcInitialize(&argc,&argv,NULL,NULL);
