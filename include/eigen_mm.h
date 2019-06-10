@@ -94,7 +94,7 @@ public:
     bool details() { return _details; }
     bool debug() { return _debug; }
     bool save_correctness() { return _save_correctness; }
-    bool save_lambda() { return _save_eigenvalues; }
+    bool save_eigenvalues() { return _save_eigenvalues; }
     bool save_eigenbasis() { return _save_eigenbasis; }
     const char* correctness_filename() { return _correctness_filename; }
     const char* eigenvalues_filename() { return _eigenvalues_filename; }
