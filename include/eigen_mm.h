@@ -35,9 +35,11 @@ private:
     bool _details = false;
     bool _debug = false;
     bool _save_correctness = false;
+    bool _save_operators = false;
     bool _save_eigenvalues = false;
     bool _save_eigenbasis = false;
     const char* _correctness_filename = "";
+    const char* _operators_filename = "";
     const char* _eigenvalues_filename = "";
     const char* _eigenbasis_filename = "";
 
@@ -64,6 +66,11 @@ public:
     {
         _save_correctness = v;
         _correctness_filename = filename;
+    }
+    void set_save_operators(bool v, const char* filename)
+    {
+        _save_operators = v;
+        _operators_filename = filename;
     }
     void set_save_eigenvalues(bool v, const char* filename) 
     {
@@ -94,9 +101,11 @@ public:
     bool details() { return _details; }
     bool debug() { return _debug; }
     bool save_correctness() { return _save_correctness; }
+    bool save_operators() { return _save_operators; }
     bool save_eigenvalues() { return _save_eigenvalues; }
     bool save_eigenbasis() { return _save_eigenbasis; }
     const char* correctness_filename() { return _correctness_filename; }
+    const char* operators_filename() { return _operators_filename; }
     const char* eigenvalues_filename() { return _eigenvalues_filename; }
     const char* eigenbasis_filename() { return _eigenbasis_filename; }
     PetscInt totalsubproblems() { return _totalsubproblems; }

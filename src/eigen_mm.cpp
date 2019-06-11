@@ -145,6 +145,25 @@ int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions *opts_in)
     opts.set_nevaluators(node.nevaluators);
     opts.set_totalsubproblems(opts.nevaluators() * opts.subproblemsperevaluator());
 
+    if opts.save_operators()
+    {
+        char K_filename[1024];
+        char M_filename[1024];
+        sprintf(K_filename, "%s_K", opts.operators_filename());
+        sprintf(M_filename, "%s_M", opts.operators_filename());
+
+        PetscViewer viewer;
+        PetscViewerBinaryOpen(PETSC_COMM_WORLD, K_filename, 
+            FILE_MODE_WRITE, &viewer);
+        MatView(K_in, viewer);
+        PetscViewerDestroy(&viewer);
+
+        PetscViewerBinaryOpen(PETSC_COMM_WORLD, M_filename, 
+            FILE_MODE_WRITE, &viewer);
+        MatView(M_in, viewer);
+        PetscViewerDestroy(&viewer);
+    }
+
     scatterInputMats(K_in, M_in);
 
     node.neval = 0;
