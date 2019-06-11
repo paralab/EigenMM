@@ -145,7 +145,7 @@ int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions *opts_in)
     opts.set_nevaluators(node.nevaluators);
     opts.set_totalsubproblems(opts.nevaluators() * opts.subproblemsperevaluator());
 
-    if opts.save_operators()
+    if(opts.save_operators())
     {
         char K_filename[1024];
         char M_filename[1024];
