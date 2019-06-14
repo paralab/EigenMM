@@ -54,12 +54,9 @@ void eigen_mm::checkCorrectness()
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
 
-    if(opts.save_correctness())
-    {
-        std::ofstream output_file(opts.correctness_filename());
-        std::ostream_iterator<PetscReal> output_iterator(output_file, "\n");
-        std::copy(residuals.begin(), residuals.end(), output_iterator);
-    }
+    std::ofstream output_file(opts.correctness_filename());
+    std::ostream_iterator<PetscReal> output_iterator(output_file, "\n");
+    std::copy(residuals.begin(), residuals.end(), output_iterator);
 
     if (opts.terse())
         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf %lf %lf\n", elapsed, start_time, end_time, (double) minnorm, (double) maxnorm, (double) avgnorm);
@@ -139,7 +136,7 @@ int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions *opts_in)
     node.rowid = node.worldrank % node.size;
     MPI_Comm_split(PETSC_COMM_WORLD, node.rowid, node.worldrank, &(node.rowcomm));
     MPI_Comm_rank(node.rowcomm, &(node.rowrank));
-    MPI_Comm_size(node.rowcomm, &(node.rowsize)); 
+    MPI_Comm_size(node.rowcomm, &(node.rowsize));
 
     node.nevaluators = node.worldsize / node.size;
     opts.set_nevaluators(node.nevaluators);
@@ -168,6 +165,12 @@ int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions *opts_in)
 
     node.neval = 0;
 
+    PetscInt N;
+    MatGetSize(K_global, &N, NULL);
+    MatCreateDense(PETSC_COMM_WORLD, PETSC_DECIDE, PETSC_DECIDE, N, N, NULL, &V);
+    MatSetUp(V);
+    VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, N, &lambda);
+
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
@@ -184,15 +187,15 @@ int eigen_mm::solve(Mat *V_out, Vec *lambda_out)
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
 
-    if (opts.debug()) PetscPrintf(PETSC_COMM_WORLD, "finding upper bound\n");
-    findUpperBound();
+    if (opts.R() <= opts.L() && opts.debug()) PetscPrintf(PETSC_COMM_WORLD, "finding upper bound\n");
+    if (opts.R() <= opts.L()) findUpperBound();
     if (opts.debug()) PetscPrintf(PETSC_COMM_WORLD, "forming subproblems\n");
     formSubproblems();
     if (opts.debug()) PetscPrintf(PETSC_COMM_WORLD, "solving subproblems\n");
     PetscInt neval = solveSubproblems();
     if (opts.debug()) PetscPrintf(PETSC_COMM_WORLD, "forming eigenbasis\n");
     formEigenbasis(neval);
-    checkCorrectness();
+    if(opts.save_correctness()) checkCorrectness();
     (*V_out) = V;
     (*lambda_out) = lambda;
 
@@ -547,19 +550,39 @@ PetscInt eigen_mm::solveSubproblems()
     int job0       = node.id;
     int jobstride  = node.nevaluators;
     int njobs      = intervals.size() / 2;
-    PetscInt neval = 0;
+    PetscInt neval;
     PetscInt in_neval;
-    for (int job = job0; job < njobs; job += jobstride)
+
+    neval = solveSubProblem(&intervals[node.id * 2 * opts.subproblemsperevaluator()], job0);
+
+    std::vector<PetscInt> eval_counts(node.nevaluators);
+    std::vector<PetscInt> eval_starts(node.nevaluators);
+    for (int i = 0; i < node.nevaluators; i++)
     {
-        neval += solveSubProblem(intervals[2*job+0], intervals[2*job+1], job);
-    }
-    for (int i = 1; i < node.nevaluators; i++)
-    {
-        in_neval = neval;
+        if (node.id == i && node.rank == 0) in_neval = neval;
         MPI_Bcast(&in_neval, 1, MPIU_INT, i*node.size, PETSC_COMM_WORLD);
-        if (node.id == 0) neval += in_neval;
+        eval_counts[i] = in_neval;
     }
-    MPI_Bcast(&neval, 1, MPIU_INT, 0, PETSC_COMM_WORLD);
+    eval_starts[0] = 0;
+    for (int i = 1; i < node.nevaluators; i++)
+        eval_starts[i] = eval_starts[i-1] + eval_counts[i-1];
+
+    node.neval = eval_counts[node.id];
+    node.neval0 = eval_starts[node.id];
+
+    if (node.worldrank == 0)
+    {
+        printf("Eigenvalues per node: [");
+        for (int i = 0; i < node.nevaluators; i++)
+            printf("%d ", eval_counts[i]);
+        printf("]\n");
+
+        printf("Eigenvalue starts per node: [");
+        for (int i = 0; i < node.nevaluators; i++)
+            printf("%d ", eval_starts[i]);
+        printf("]\n");
+    }
+        
 
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
@@ -577,66 +600,33 @@ void eigen_mm::formEigenbasis(PetscInt neval)
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
 
-    // Process p has block b:
-    //  size of block b: (lm by ln)
-    //  ln is the number of eigenpairs computed by process p's evaluator
-    //  lm is lv_data.size() / ln
-    PetscInt N;
+    Vec v;
+    PetscInt lm, lm0, N;
+    PetscReal lam, *v_data;
+
     MatGetSize(K, &N, NULL);
+    VecCreateMPI(node.comm, PETSC_DECIDE, N, &v);
+    VecGetLocalSize(v, &lm);
+    MPI_Exscan(&lm, &lm0, 1, MPIU_INT, MPI_SUM, node.comm);
+    if (node.rank == 0) lm0 = 0;
 
-    PetscInt ln = node.neval;
-    PetscInt lm = lv_data.size() / ln;
+    std::vector<PetscInt> idxn(1);
+    std::vector<PetscInt> idxm(lm);
+    for (int i = 0; i < lm; i++)
+        idxm[i] = lm0 + i;
 
-    // transpose lv_data?
-    std::vector<PetscScalar> lv_data_transpose(lv_data.size());
-    for (int row = 0; row < lm; row++)
-        for (int col = 0; col < ln; col++)
-            lv_data_transpose[col + row*ln] = lv_data[row + col*lm];
-
-    // Determine row0 for each process
-    //   reduce over lm on evaluator communicator
-    PetscInt all_lm[node.size];
-    PetscInt all_row0[node.size];
-    all_lm[node.rank] = lm;
-    for (int i = 0; i < node.size; i++)
-        MPI_Bcast(&all_lm[i], 1, MPIU_INT, i, node.comm);
-    all_row0[0] = 0;
-    for (int i = 1; i < node.size; i++)
-        all_row0[i] = all_row0[i-1] + all_lm[i-1];
-    PetscInt row0 = all_row0[node.rank];
-
-    // Determine col0 for each process
-    //   reduce over ln on row communicator
-    PetscInt all_ln[node.rowsize];
-    PetscInt all_col0[node.rowsize];
-    all_ln[node.rowrank] = ln;
-    for (int i = 0; i < node.rowsize; i++)
-        MPI_Bcast(&all_ln[i], 1, MPIU_INT, i, node.rowcomm);
-    all_col0[0] = 0;
-    for (int i = 1; i < node.rowsize; i++)
-        all_col0[i] = all_col0[i-1] + all_ln[i-1];
-    PetscInt col0 = all_col0[node.rowrank];
-
-    // allocate idxm and idxn
-    PetscInt idxm[lm];
-    PetscInt idxn[ln];
-    int idx = 0;
-    for (int row = 0; row < lm; row++)
-        idxm[row] = row0 + row;
-    for (int col = 0; col < ln; col++)
-        idxn[col] = col0 + col;
-
-    MatCreateDense(PETSC_COMM_WORLD, PETSC_DECIDE, 
-        PETSC_DECIDE, N, neval, NULL, &V);
-    MatSetUp(V);
-    MatSetValues(V, lm, idxm, ln, idxn, &lv_data_transpose[0], INSERT_VALUES);
+    for (int i = 0; i < node.neval; i++)
+    {
+        idxn[0] = node.neval0 + i;
+        EPSGetEigenpair(eps, i, &lam, NULL, v, NULL);
+        VecGetArray(v, &v_data);
+        MatSetValues(V, lm, &idxm[0], 1, &idxn[0], v_data, INSERT_VALUES);
+        VecRestoreArray(v, &v_data);
+        VecSetValue(lambda, idxn[0], lam, INSERT_VALUES);
+    }
     MPI_Barrier(PETSC_COMM_WORLD);
     MatAssemblyBegin(V, MAT_FINAL_ASSEMBLY);
     MatAssemblyEnd(V, MAT_FINAL_ASSEMBLY);
-
-    VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, neval, &lambda);
-    VecSetValues(lambda, ln, idxn, &lambda_data[0], INSERT_VALUES);
-    MPI_Barrier(PETSC_COMM_WORLD);
     VecAssemblyBegin(lambda);
     VecAssemblyEnd(lambda);
 
@@ -676,55 +666,55 @@ void eigen_mm::scatterInputMats(Mat &K_in, Mat &M_in)
     MatCreateRedundantMatrix(K_in, node.nevaluators, node.comm, MAT_INITIAL_MATRIX, &K);
     MatCreateRedundantMatrix(M_in, node.nevaluators, node.comm, MAT_INITIAL_MATRIX, &M);
 }
-PetscInt eigen_mm::solveSubProblem(PetscReal a, PetscReal b, int job)
+PetscInt eigen_mm::solveSubProblem(PetscReal *intervals, int job)
 {
     MPI_Barrier(node.comm);
     double start_time = MPI_Wtime();
 
-    if(opts.debug()) PetscPrintf(node.comm, "Solving interval [%lf, %lf]\n", a, b);
+    if(opts.debug()) PetscPrintf(node.comm, "Solving interval [%lf, %lf]\n", 
+        intervals[0], intervals[2*opts.subproblemsperevaluator()-1]);
 
     // Set up solver
     PetscInt nconv;
-    EPS eps;
-    char subinterval_string[1024] = "";
-    sprintf(subinterval_string, "-eps_interval %lf,%lf", (double)a, (double)b);
-    PetscOptionsInsertString(nullptr, subinterval_string);
-    PetscOptionsInsertString(nullptr, "-st_type sinvert");
-    PetscOptionsInsertString(nullptr, "-st_ksp_type preonly");
-    PetscOptionsInsertString(nullptr, "-st_pc_type cholesky");
-    PetscOptionsInsertString(nullptr, "-st_pc_factor_mat_solver_package mumps");
-    PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_13 1");
-    PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_14 80");
+
+    if (opts.ksp_solver_type() == 0)
+    {
+        PetscOptionsInsertString(nullptr, "-st_type sinvert");
+        PetscOptionsInsertString(nullptr, "-st_ksp_type preonly");
+        PetscOptionsInsertString(nullptr, "-st_pc_type cholesky");
+        PetscOptionsInsertString(nullptr, "-st_pc_factor_mat_solver_package mumps");
+        PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_13 1");
+        PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_14 80");
+    }
+    else if (opts.ksp_solver_type() == 1)
+    {
+        PetscOptionsInsertString(nullptr, "-st_type sinvert");
+        PetscOptionsInsertString(nullptr, "-st_ksp_type chebyshev");
+    }
+
     EPSCreate(node.comm,&eps);
     EPSSetOperators(eps,K,M);
     EPSSetProblemType(eps,EPS_GHEP);
     EPSSetFromOptions(eps);
+    if (opts.eps_solver_type() == 0) 
+    {
+        std::vector<PetscReal> subint(opts.subproblemsperevaluator()+1);
+        for (int i = 0; i < opts.subproblemsperevaluator(); i++)
+            subint[i] = intervals[2*i];
+        subint[opts.subproblemsperevaluator()] = intervals[2*opts.subproblemsperevaluator()-1];
+        EPSSetWhichEigenpairs(eps, EPS_ALL);
+        EPSSetInterval(eps, intervals[0], intervals[2*opts.subproblemsperevaluator()-1]);
+        EPSKrylovSchurSetPartitions(eps, opts.subproblemsperevaluator());
+        EPSKrylovSchurSetSubintervals(eps, &subint[0]);
+        for (int i = 0; i < opts.subproblemsperevaluator()+1; i++)
+            PetscPrintf(node.comm, "(%d) Subint[%d] = %lf\n", node.id, i, subint[i]);
+    }
 
     // Solve
     EPSSolve(eps);
 
     // Process results
     EPSGetConverged(eps, &nconv); 
-    
-    Vec v;
-    PetscInt N, size;
-    PetscReal lam, *v_data;
-
-    MatGetSize(K, &N, NULL);
-    VecCreateMPI(node.comm, PETSC_DECIDE, N, &v);
-    VecGetLocalSize(v, &size);
-    for (int i = 0; i < nconv; i++)
-    {
-        EPSGetEigenpair(eps, i, &lam, NULL, v, NULL);
-        lambda_data.push_back(lam);
-        VecGetArray(v, &v_data);
-        for (int j = 0; j < size; j++) lv_data.push_back(v_data[j]);
-        VecRestoreArray(v, &v_data);
-    }
- 
-    // Clean up solver
-    VecDestroy(&v);
-    EPSDestroy(&eps);
 
     node.neval += nconv;
 

@@ -21,8 +21,8 @@ private:
     PetscInt _nevt = 100;
     PetscInt _splitmaxiters = 10;
     PetscInt _nodesperevaluator = 1;
-    PetscInt _subproblemsperevaluator = 16;
-    PetscInt _totalsubproblems = 16;
+    PetscInt _subproblemsperevaluator = 1;
+    PetscInt _totalsubproblems = 1;
     PetscInt _nevaluators = 1;
     PetscInt _p = 30;
     PetscInt _nv = 10;
@@ -42,6 +42,8 @@ private:
     const char* _operators_filename = "";
     const char* _eigenvalues_filename = "";
     const char* _eigenbasis_filename = "";
+    PetscInt _eps_solver_type = 0;
+    PetscInt _ksp_solver_type = 0;
 
 public:
     SolverOptions() {}
@@ -83,6 +85,8 @@ public:
         _eigenbasis_filename = filename;
     }
     void set_totalsubproblems(PetscInt v) { _totalsubproblems = v; }
+    void set_eps_solver_type(PetscInt v) { _eps_solver_type = v; }
+    void set_ksp_solver_type(PetscInt v) { _ksp_solver_type = v; }
     
     // getters
     PetscInt nevt() { return _nevt; }
@@ -109,6 +113,8 @@ public:
     const char* eigenvalues_filename() { return _eigenvalues_filename; }
     const char* eigenbasis_filename() { return _eigenbasis_filename; }
     PetscInt totalsubproblems() { return _totalsubproblems; }
+    PetscInt eps_solver_type() { return _eps_solver_type; }
+    PetscInt ksp_solver_type() { return _ksp_solver_type; }
 };
 
 struct NodeInfo
@@ -130,6 +136,7 @@ struct NodeInfo
 
     // Results
     PetscInt neval;
+    PetscInt neval0;
 };
 
 class eigen_mm{
@@ -138,6 +145,7 @@ class eigen_mm{
 
 private:
 
+    EPS eps;
     SolverOptions opts;
     NodeInfo node;
     MPI_Comm comm = MPI_COMM_WORLD;
@@ -145,8 +153,6 @@ private:
     Mat K_global, M_global;
     Vec lambda;
     std::vector<PetscReal> intervals;
-    std::vector<PetscReal> lambda_data;
-    std::vector<PetscReal> lv_data;
     std::vector<PetscReal> residuals;
     unsigned int eig_num = 0; // number of computed eigenvaleus.
 
@@ -190,7 +196,7 @@ public:
     void formEigenbasis(PetscInt neval);
 
     void scatterInputMats(Mat &K_in, Mat &M_in);
-    PetscInt solveSubProblem(PetscReal a, PetscReal b, int job);
+    PetscInt solveSubProblem(PetscReal *intervals, int job);
     void splitSubProblem(PetscReal a, PetscReal b, PetscReal *c, 
         PetscInt *out_ec_left, PetscInt *out_ec_right);
     PetscInt computeDev_approximate(PetscReal a, PetscReal U, PetscBool rl);

@@ -4,8 +4,8 @@
 	_nevt="100" 
 	_splitmaxiters="10" 
 	_nodesperevaluator="1" 
-	_subproblemsperevaluator="16" 
-	_totalsubproblems="16" 
+	_subproblemsperevaluator="1" 
+	_totalsubproblems="1" 
 	_nevaluators="1" 
 	_p="0" 
 	_nv="10" 
@@ -24,5 +24,7 @@
 	_correctness_filename="" 
 	_operators_filename=""
 	_eigenvalues_filename="" 
-	_eigenbasis_filename=""/>
+	_eigenbasis_filename=""
+	_eps_solver_type="0"
+	_ksp_solver_type="0"/>
 </EIGEN_MM>
