@@ -5,6 +5,7 @@
 #include <slepceps.h>
 
 #include <vector>
+#include <map>
 #include <string>
 #include <fstream>
 #include <iterator>

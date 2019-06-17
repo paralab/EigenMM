@@ -126,7 +126,37 @@ int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions *opts_in)
     char processor_name[MPI_MAX_PROCESSOR_NAME];
     MPI_Get_processor_name(processor_name, &resultlen);
     uint32_t processor_id = adler32((unsigned char *) &processor_name[0], resultlen*sizeof(char));
-    MPI_Comm_split(PETSC_COMM_WORLD, processor_id, node.worldrank, &(node.comm));
+    uint32_t evaluator_id;
+
+    // Gather processor ids to root
+    int count = 0;
+    std::vector<uint32_t> processor_ids;
+    std::vector<uint32_t> evaluator_ids;
+    std::map<uint32_t, uint32_t> processor_to_evaluator;
+    if (node.worldrank == 0) processor_ids.resize(node.worldsize);
+    if (node.worldrank == 0) evaluator_ids.resize(node.worldsize);
+    MPI_Gather(&processor_id, 1, MPI_UINT32_T, &processor_ids[0], 1, MPI_UINT32_T, 0, PETSC_COMM_WORLD);
+    if (node.worldrank == 0)
+    {
+        for (int i = 0; i < node.worldsize; i++)
+        {
+            uint32_t key = processor_ids[i];
+            if (processor_to_evaluator.count(key) == 0)
+            {
+                processor_to_evaluator[key] = count / opts.nodesperevaluator();
+                count++;
+            }
+        }
+        for (int i = 0; i < node.worldsize; i++)
+        {
+            evaluator_ids[i] = processor_to_evaluator[processor_ids[i]];
+        }
+    }
+    MPI_Scatter(&evaluator_ids[0], 1, MPI_UINT32_T, &evaluator_id, 1, MPI_UINT32_T, 0, PETSC_COMM_WORLD);
+    if (node.worldrank == 0) count = processor_to_evaluator.size();
+    MPI_Bcast(&count, 1, MPI_INT, 0, PETSC_COMM_WORLD);
+
+    MPI_Comm_split(PETSC_COMM_WORLD, evaluator_id, node.worldrank, &(node.comm));
     MPI_Comm_size(node.comm, &(node.size));
     MPI_Comm_rank(node.comm, &(node.rank));
     node.id = node.worldrank / node.size;
@@ -138,7 +168,7 @@ int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions *opts_in)
     MPI_Comm_rank(node.rowcomm, &(node.rowrank));
     MPI_Comm_size(node.rowcomm, &(node.rowsize));
 
-    node.nevaluators = node.worldsize / node.size;
+    node.nevaluators = count / opts.nodesperevaluator();
     opts.set_nevaluators(node.nevaluators);
     opts.set_totalsubproblems(opts.nevaluators() * opts.subproblemsperevaluator());
 
