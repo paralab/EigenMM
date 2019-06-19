@@ -87,6 +87,7 @@ target_link_libraries(eigenmm ${MPI_LIBRARIES} ${SLEPC_LIBRARIES} ${PETSC_LIBRAR
 install(FILES ${EIGENMM_HEADER_FILES} DESTINATION ${TPDIST}/include)
 install(TARGETS eigenmm DESTINATION ${TPDIST}/lib)
 
+# If this cmake file is called inside Nektar++, "TPDIST" won't be NULL.
 IF(${TPDIST})
     configure_file(${EIGENMM_HEADER_FILES} ${TPDIST}/include)
 ENDIF(${TPDIST})
