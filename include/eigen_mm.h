@@ -157,6 +157,9 @@ private:
     std::vector<PetscReal> residuals;
     unsigned int eig_num = 0; // number of computed eigenvaleus.
 
+    PetscReal find_amax(PetscInt k);
+    PetscReal find_b(PetscInt k, PetscReal a);
+
 public:
 
     bool store_eigenpairs = true; // set this to true to store eigenpairs in the wrapper class.
@@ -172,6 +175,7 @@ public:
     Mat& getK();
     Mat& getM();
     int solve(Mat *V_out, Vec *lambda_out);
+    int solvetime_exp();
     void print_eig_val_real();
     void print_eig_val_imag();
     void print_eig_val();

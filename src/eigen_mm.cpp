@@ -195,12 +195,6 @@ int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions *opts_in)
 
     node.neval = 0;
 
-    PetscInt N;
-    MatGetSize(K_global, &N, NULL);
-    MatCreateDense(PETSC_COMM_WORLD, PETSC_DECIDE, PETSC_DECIDE, N, N, NULL, &V);
-    MatSetUp(V);
-    VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, N, &lambda);
-
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
@@ -216,6 +210,12 @@ int eigen_mm::solve(Mat *V_out, Vec *lambda_out)
 {
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
+
+    PetscInt N;
+    MatGetSize(K_global, &N, NULL);
+    MatCreateDense(PETSC_COMM_WORLD, PETSC_DECIDE, PETSC_DECIDE, N, N, NULL, &V);
+    MatSetUp(V);
+    VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, N, &lambda);
 
     if (opts.R() <= opts.L() && opts.debug()) PetscPrintf(PETSC_COMM_WORLD, "finding upper bound\n");
     if (opts.R() <= opts.L()) findUpperBound();
@@ -237,6 +237,114 @@ int eigen_mm::solve(Mat *V_out, Vec *lambda_out)
         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf\n", elapsed, start_time, end_time);
     else
         PetscPrintf(PETSC_COMM_WORLD, "(solve) Elapsed: %lf, Start: %lf, End: %lf\n", elapsed, start_time, end_time);
+}
+
+PetscReal eigen_mm::find_amax(PetscInt k)
+{
+    PetscReal bleft, bright, split;
+    PetscInt iter, ec, err;
+
+    bleft = 0;
+    bright = opts.R();
+    iter = 1;
+    while(abs(err) > opts.nevt() && iter < opts.splitmaxiters())
+    {
+        split = (bleft + bright) / 2;
+        countInterval(split, opts.R(), &ec);
+        err = ec - k;
+        if (err < 0) { bleft  = split; }
+        else         { bright = split; }
+        iter++;
+    }
+    return split;
+}
+PetscReal eigen_mm::find_b(PetscInt k, PetscReal a)
+{
+    PetscReal bleft, bright, split;
+    PetscInt iter, ec, err;
+
+    bleft = a;
+    bright = opts.R();
+    iter = 1;
+    while(abs(err) > opts.nevt() && iter < opts.splitmaxiters())
+    {
+        split = (bleft + bright) / 2;
+        countInterval(a, split, &ec);
+        err = ec - k;
+        if (err < 0) { bleft  = split; }
+        else         { bright = split; }
+        iter++;
+    }
+    return split;
+}
+
+int eigen_mm::solvetime_exp()
+{
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double start_time = MPI_Wtime();
+
+    // for i = 0 : nk - 1
+    //   compute amax using k[i] and R
+    //   for j = 0 : ns - 1
+    //     find b[j] such that the interval [a[j], b[j]] contains k[i] eigenpairs
+    //     solve the interval [a[j], b[j]] and store elapsed in e[i*ns + j]
+
+    // obtain (L, R, ns) from solver options (use nv for ns since p will be 0)
+
+    // hard code kmax, kmin, nk
+    PetscInt kmin = 500;
+    PetscInt kmax = 5000;
+    PetscInt nk = 10;
+    PetscInt kstep = (kmax - kmin) / (nk - 1);
+
+    // initialize arrays a[ns], b[ns], k[nk], e[nk*ns]
+    std::vector<PetscReal> a(opts.nv() * nk);
+    std::vector<PetscReal> b(opts.nv() * nk);
+    std::vector<PetscReal> e(opts.nv() * nk);
+    std::vector<PetscInt>  d(opts.nv() * nk);
+    std::vector<PetscInt>  k(nk);
+
+    PetscReal amin = opts.L();
+    PetscReal amax, astep;
+
+    PetscPrintf(PETSC_COMM_WORLD, "Starting experiment:\n");
+    for (int i = 0; i < nk; i++)
+    {
+        amax = find_amax(k[i]);
+        astep = (amax - amin) / (opts.nv() - 1);
+        if (opts.terse())
+            PetscPrintf(PETSC_COMM_WORLD, "%d %lf %lf\n", k[i], (double)opts.L(), (double)amax);
+        else
+            PetscPrintf(PETSC_COMM_WORLD, "  (k = %d) Checking starting points in interval [%lf, %lf]\n", k[i], (double)opts.L(), (double)amax);
+        for (int j = 0; j < opts.nv(); j++)
+        {
+            int idx = i*opts.nv() + j;
+            a[idx] = amin + astep * j;
+            b[idx] = find_b(k[i], a[idx]);
+
+            MPI_Barrier(PETSC_COMM_WORLD);
+            double exp_start_time = MPI_Wtime();
+
+            PetscReal interval[2] = {a[idx], b[idx]};
+            PetscInt neval = solveSubProblem(interval, 0);
+
+            MPI_Barrier(PETSC_COMM_WORLD);
+            double exp_end_time = MPI_Wtime();
+            d[idx] = neval - k[i];
+            e[idx] = exp_end_time - exp_start_time;
+
+            if (opts.terse())
+                PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %d %d\n", 
+                    (double)a[idx], (double)b[idx], (double)e[idx], neval, d[idx]);
+            else
+                PetscPrintf(PETSC_COMM_WORLD, "    Interval [%lf, %lf]: Time elapsed: %lf, Eigenvalues found: %d, Difference from expected: %d\n", 
+                    (double)a[idx], (double)b[idx], (double)e[idx], neval, d[idx]);
+        }
+    }
+
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double end_time = MPI_Wtime();
+    double elapsed = end_time - start_time;
 }
 
 Mat& eigen_mm::getK(){
@@ -754,7 +862,7 @@ PetscInt eigen_mm::solveSubProblem(PetscReal *intervals, int job)
 
     if (opts.terse())
         PetscPrintf(node.comm, "%d %d %lf %lf %lf %d\n", node.id, job, elapsed, start_time, end_time, (int) nconv);
-    else
+    else if (opts.debug())
         PetscPrintf(node.comm, "(solveSubproblem) Evaluator: %d, Subinterval: %d, Elapsed: %lf, Start: %lf, End: %lf, Number of Eigenpairs: %d\n", node.id, job, elapsed, start_time, end_time, (int) nconv);
 
     return nconv;
