@@ -283,13 +283,10 @@ int eigen_mm::solvetime_exp()
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
 
-    // for i = 0 : nk - 1
-    //   compute amax using k[i] and R
-    //   for j = 0 : ns - 1
-    //     find b[j] such that the interval [a[j], b[j]] contains k[i] eigenpairs
-    //     solve the interval [a[j], b[j]] and store elapsed in e[i*ns + j]
-
     // obtain (L, R, ns) from solver options (use nv for ns since p will be 0)
+
+    // determine upper bound if R is invalid
+    if (opts.R() <= opts.L()) findUpperBound();
 
     // hard code kmax, kmin, nk
     PetscInt kmin = 100;
