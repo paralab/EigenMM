@@ -292,8 +292,8 @@ int eigen_mm::solvetime_exp()
     // obtain (L, R, ns) from solver options (use nv for ns since p will be 0)
 
     // hard code kmax, kmin, nk
-    PetscInt kmin = 500;
-    PetscInt kmax = 5000;
+    PetscInt kmin = 100;
+    PetscInt kmax = 4096;
     PetscInt nk = 10;
     PetscInt kstep = (kmax - kmin) / (nk - 1);
 
@@ -345,6 +345,8 @@ int eigen_mm::solvetime_exp()
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
+
+    PetscPrintf(PETSC_COMM_WORLD, "Finished with all experiments in %lf seconds.\n", elapsed);
 }
 
 Mat& eigen_mm::getK(){
