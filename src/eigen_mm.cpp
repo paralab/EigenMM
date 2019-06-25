@@ -247,12 +247,13 @@ PetscReal eigen_mm::find_amax(PetscInt k)
     bleft = 0;
     bright = opts.R();
     iter = 1;
+    MatGetSize(K_global, &err, NULL);
     while(abs(err) > opts.nevt() && iter < opts.splitmaxiters())
     {
         split = (bleft + bright) / 2;
         countInterval(split, opts.R(), &ec);
         err = ec - k;
-        if (err < 0) { bleft  = split; }
+        if (err > 0) { bleft  = split; }
         else         { bright = split; }
         iter++;
     }
@@ -266,6 +267,7 @@ PetscReal eigen_mm::find_b(PetscInt k, PetscReal a)
     bleft = a;
     bright = opts.R();
     iter = 1;
+    MatGetSize(K_global, &err, NULL);
     while(abs(err) > opts.nevt() && iter < opts.splitmaxiters())
     {
         split = (bleft + bright) / 2;
