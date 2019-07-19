@@ -356,13 +356,13 @@ Mat& eigen_mm::getM(){
     return M;
 }
 
-void eigen_mm::print_eig_val_real(){
-    print_vector(eig_val_real, 0, "eigenvalues (real part):", comm);
-}
+//void eigen_mm::print_eig_val_real(){
+//    print_vector(eig_val_real, 0, "eigenvalues (real part):", comm);
+//}
 
-void eigen_mm::print_eig_val_imag(){
-    print_vector(eig_val_imag, 0, "eigenvalues (imaginary part):", comm);
-}
+//void eigen_mm::print_eig_val_imag(){
+//    print_vector(eig_val_imag, 0, "eigenvalues (imaginary part):", comm);
+//}
 
 void eigen_mm::print_eig_val(){
 
@@ -384,7 +384,7 @@ void eigen_mm::print_eig_val(){
 
     MPI_Barrier(comm);
 }
-
+/*
 void eigen_mm::print_eig_vec_real(int ran){
     // if ran >= 0 print the vector elements on proc with rank = ran
     // otherwise print the vector elements on all processors in order. (first on proc 0, then proc 1 and so on.)
@@ -402,7 +402,7 @@ void eigen_mm::print_eig_vec_imag(int ran){
         print_vector(eig_vec_imag[i], ran, text + std::to_string(i), comm);
     }
 }
-
+*/
 void eigen_mm::print_eig_vec(int ran){
     // if ran >= 0 print the vector elements on proc with rank = ran
     // otherwise print the vector elements on all processors in order. (first on proc 0, then proc 1 and so on.)

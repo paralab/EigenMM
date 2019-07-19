@@ -209,7 +209,7 @@ public:
     PetscReal computeRadius(Mat &A);    
     void countInterval(PetscReal a, PetscReal b, PetscInt *count);
 };
-
+/*
 template<class T>
 int print_vector(const std::vector<T> &v, const int ran, const std::string &name, MPI_Comm comm){
     // if ran >= 0 print the vector elements on proc with rank = ran
@@ -246,7 +246,7 @@ int print_vector(const std::vector<T> &v, const int ran, const std::string &name
 
     return 0;
 }
-
+*/
 //double print_time(double t_start, double t_end, const std::string function_name, MPI_Comm comm);
 
 #endif //eigen_mm_H
