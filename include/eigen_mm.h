@@ -11,8 +11,7 @@
 #include <iterator>
 #include <iostream>
 #include "mpi.h"
-
-#define __DEBUG1__
+#include "tinyxml.h"
 
 #define PI 3.141592653589793238462
 
@@ -25,24 +24,25 @@ private:
     PetscInt _subproblemsperevaluator = 1;
     PetscInt _totalsubproblems = 1;
     PetscInt _nevaluators = 1;
+    PetscInt _nevals = -1;
+    PetscInt _nk = 5;
+    PetscInt _nb = 3;
     PetscInt _p = 30;
     PetscInt _nv = 10;
     PetscInt _raditers = 10;
     PetscReal _splittol = 0.9;
     PetscReal _radtol = 1e-3;
     PetscReal _L = 0.01;
-    PetscReal _R = 10000.0;
+    PetscReal _R = -1.0;
     bool _terse = false;
     bool _details = false;
     bool _debug = false;
     bool _save_correctness = false;
-    bool _save_operators = false;
     bool _save_eigenvalues = false;
     bool _save_eigenbasis = false;
-    const char* _correctness_filename = "";
-    const char* _operators_filename = "";
-    const char* _eigenvalues_filename = "";
-    const char* _eigenbasis_filename = "";
+    char _correctness_filename[2048];
+    char _eigenvalues_filename[2048];
+    char _eigenbasis_filename[2048];
     PetscInt _eps_solver_type = 0;
     PetscInt _ksp_solver_type = 0;
 
@@ -55,6 +55,9 @@ public:
     void set_nodesperevaluator(PetscInt v) { _nodesperevaluator = v; }
     void set_subproblemsperevaluator(PetscInt v) { _subproblemsperevaluator = v; }
     void set_nevaluators(PetscInt v) { _nevaluators = v; }
+    void set_nevals(PetscInt v) { _nevals = v; }
+    void set_nk(PetscInt v) { _nk = v; }
+    void set_nb(PetscInt v) { _nb = v; }
     void set_p(PetscInt v) { _p = v; }
     void set_nv(PetscInt v) { _nv = v; }
     void set_raditers(PetscInt v) { _raditers = v; }
@@ -68,22 +71,17 @@ public:
     void set_save_correctness(bool v, const char* filename)
     {
         _save_correctness = v;
-        _correctness_filename = filename;
-    }
-    void set_save_operators(bool v, const char* filename)
-    {
-        _save_operators = v;
-        _operators_filename = filename;
+        sprintf(_correctness_filename, "%s", filename);
     }
     void set_save_eigenvalues(bool v, const char* filename) 
     {
         _save_eigenvalues = v;
-        _eigenvalues_filename = filename; 
+        sprintf(_eigenvalues_filename, "%s", filename);
     }
     void set_save_eigenbasis(bool v, const char* filename)
     {
         _save_eigenbasis = v;
-        _eigenbasis_filename = filename;
+         sprintf(_eigenbasis_filename, "%s", filename);
     }
     void set_totalsubproblems(PetscInt v) { _totalsubproblems = v; }
     void set_eps_solver_type(PetscInt v) { _eps_solver_type = v; }
@@ -95,6 +93,9 @@ public:
     PetscInt nodesperevaluator() { return _nodesperevaluator; }
     PetscInt subproblemsperevaluator() { return _subproblemsperevaluator; }
     PetscInt nevaluators() { return _nevaluators; }
+    PetscInt nevals() { return _nevals; }
+    PetscInt nk() { return _nk; }
+    PetscInt nb() { return _nb; }
     PetscInt p() { return _p; }
     PetscInt nv() { return _nv; }
     PetscInt raditers() { return _raditers; }
@@ -106,13 +107,11 @@ public:
     bool details() { return _details; }
     bool debug() { return _debug; }
     bool save_correctness() { return _save_correctness; }
-    bool save_operators() { return _save_operators; }
     bool save_eigenvalues() { return _save_eigenvalues; }
     bool save_eigenbasis() { return _save_eigenbasis; }
-    const char* correctness_filename() { return _correctness_filename; }
-    const char* operators_filename() { return _operators_filename; }
-    const char* eigenvalues_filename() { return _eigenvalues_filename; }
-    const char* eigenbasis_filename() { return _eigenbasis_filename; }
+    char* correctness_filename() { return _correctness_filename; }
+    char* eigenvalues_filename() { return _eigenvalues_filename; }
+    char* eigenbasis_filename() { return _eigenbasis_filename; }
     PetscInt totalsubproblems() { return _totalsubproblems; }
     PetscInt eps_solver_type() { return _eps_solver_type; }
     PetscInt ksp_solver_type() { return _ksp_solver_type; }
@@ -127,126 +126,59 @@ struct NodeInfo
     PetscInt rank, size, id;
     MPI_Comm comm;
 
-    // row
-    PetscInt rowrank, rowsize, rowid;
-    MPI_Comm rowcomm;
-
     // additional properties
     PetscInt nevaluators;
-    PetscViewer viewer;
+    
+    const char* procname;
+    PetscInt procid;
 
     // Results
     PetscInt neval;
     PetscInt neval0;
 };
 
-class eigen_mm{
-    // Generalized eigenvalue problem:
-    // A v = \lambda B v
-
+class eigen_mm
+{
 private:
 
     EPS eps;
     SolverOptions opts;
     NodeInfo node;
-    MPI_Comm comm = MPI_COMM_WORLD;
     Mat K, M, V;
     Mat K_global, M_global;
     Vec lambda;
     std::vector<PetscReal> intervals;
     std::vector<PetscReal> residuals;
-    unsigned int eig_num = 0; // number of computed eigenvaleus.
-
-    PetscReal find_amax(PetscInt k);
-    PetscReal find_b(PetscInt k, PetscReal a);
 
 public:
-
-    bool store_eigenpairs = true; // set this to true to store eigenpairs in the wrapper class.
-    std::vector<double> eig_val_real; // real part of eigenvalues. the same on all the processors
-    std::vector<double> eig_val_imag; // imaginary part of eigenvalues. the same on all the processors
-    std::vector< std::vector<double> > eig_vec_real; // real part of eigenvectors. local part of the vector on each processor
-    std::vector< std::vector<double> > eig_vec_imag; // imaginary part of eigenvectors. local part of the vector on each processor
 
     eigen_mm();
     ~eigen_mm();
 
-    int init(Mat &K_in, Mat &M_in, SolverOptions *opt);
-    Mat& getK();
-    Mat& getM();
+    int init(Mat &K_in, Mat &M_in, SolverOptions &opt);
     int solve(Mat *V_out, Vec *lambda_out);
-    int solvetime_exp();
-    void print_eig_val_real();
-    void print_eig_val_imag();
-    void print_eig_val();
-    void print_eig_vec_real(int ran);
-    void print_eig_vec_imag(int ran);
-    void print_eig_vec(int ran);
-
-    int viewK();
-    int viewM();
-
-    int get_eig_num();
-    double* get_eig_val_real();
-    double* get_eig_val_imag();
-    double* get_eig_vec_real(int i);
-    double* get_eig_vec_imag(int i);
-
-    void checkCorrectness();
-    void checkOrthogonality();
 
     void findUpperBound();
+    void rescaleInterval();
     void formSubproblems();
     PetscInt solveSubproblems();
     void formEigenbasis(PetscInt neval);
 
-    void scatterInputMats(Mat &K_in, Mat &M_in);
     PetscInt solveSubProblem(PetscReal *intervals, int job);
     void splitSubProblem(PetscReal a, PetscReal b, PetscReal *c, 
         PetscInt *out_ec_left, PetscInt *out_ec_right);
+    void global_refine(PetscInt n,
+                       std::vector<PetscReal> &x, 
+                       std::vector<PetscInt>   C, 
+                       PetscInt Nhat);
+    void balance_intervals(PetscReal   a, PetscReal   b, PetscReal   *c, 
+                           PetscInt reva, PetscInt revb, PetscInt *revc,
+                           PetscInt  *Cl, PetscInt  *Cr);
     PetscInt computeDev_approximate(PetscReal a, PetscReal U, PetscBool rl);
     PetscInt computeDev_exact(PetscReal a, PetscBool rl);
-    PetscReal computeRadius(Mat &A);    
+    PetscReal computeRadius(Mat &A);
     void countInterval(PetscReal a, PetscReal b, PetscInt *count);
+
 };
-/*
-template<class T>
-int print_vector(const std::vector<T> &v, const int ran, const std::string &name, MPI_Comm comm){
-    // if ran >= 0 print the vector elements on proc with rank = ran
-    // otherwise print the vector elements on all processors in order. (first on proc 0, then proc 1 and so on.)
-
-    int rank, nprocs;
-    MPI_Comm_size(comm, &nprocs);
-    MPI_Comm_rank(comm, &rank);
-
-    unsigned iter = 0;
-    if(ran >= 0) {
-        if (rank == ran) {
-            printf("\n%s on proc = %d, size = %ld: \n", name.c_str(), ran, v.size());
-            for (auto i:v) {
-                std::cout << iter << "\t" << i << std::endl;
-                iter++;
-            }
-            printf("\n");
-        }
-    } else{
-        for(unsigned proc = 0; proc < nprocs; proc++){
-            MPI_Barrier(comm);
-            if (rank == proc) {
-                printf("\n%s on proc = %d, size = %ld: \n", name.c_str(), proc, v.size());
-                for (auto i:v) {
-                    std::cout << iter << "\t" << i << std::endl;
-                    iter++;
-                }
-                printf("\n");
-            }
-            MPI_Barrier(comm);
-        }
-    }
-
-    return 0;
-}
-*/
-//double print_time(double t_start, double t_end, const std::string function_name, MPI_Comm comm);
 
 #endif //eigen_mm_H

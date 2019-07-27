@@ -18,88 +18,6 @@ uint32_t adler32(unsigned char *data, size_t len)
 }
 // ===============================================
 
-void eigen_mm::checkCorrectness()
-{
-    MPI_Barrier(PETSC_COMM_WORLD);
-    double start_time = MPI_Wtime();
-
-    PetscInt N, neval;
-    MatGetSize(V, &N, &neval);
-    residuals.resize(neval);
-
-    Mat residual, temp;
-    MatConvert(V, MATSAME, MAT_INITIAL_MATRIX, &temp);
-    MatDiagonalScale(temp, NULL, lambda);
-    MatMatMult(M_global, temp, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &residual);
-    MatMatMult(K_global, V, MAT_REUSE_MATRIX, PETSC_DEFAULT, &temp);
-    MatAYPX(residual, -1, temp, DIFFERENT_NONZERO_PATTERN);
-
-    MatGetColumnNorms(residual, NORM_2, &residuals[0]);
-
-    PetscReal minnorm = MPIU_MAX;
-    PetscReal maxnorm = 0.0;
-    PetscReal avgnorm = 0.0;
-    for (int k = 0; k < neval; k++)
-    {
-        minnorm = (minnorm < residuals[k]) ? minnorm : residuals[k];
-        maxnorm = (maxnorm > residuals[k]) ? maxnorm : residuals[k];
-        avgnorm += residuals[k];
-    }
-    avgnorm /= neval;
-
-    MatDestroy(&residual);
-    MatDestroy(&temp);
-
-    MPI_Barrier(PETSC_COMM_WORLD);
-    double end_time = MPI_Wtime();
-    double elapsed = end_time - start_time;
-
-    std::ofstream output_file(opts.correctness_filename());
-    std::ostream_iterator<PetscReal> output_iterator(output_file, "\n");
-    std::copy(residuals.begin(), residuals.end(), output_iterator);
-
-    if (opts.terse())
-        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf %lf %lf\n", elapsed, start_time, end_time, (double) minnorm, (double) maxnorm, (double) avgnorm);
-    else
-        PetscPrintf(PETSC_COMM_WORLD, "(checkCorrectness) ||A*vk - lambdak*M*vk|| (min/max/avg) = (%.16lf / %.16lf / %.16lf), Elapsed = %lf, Start = %lf, End = %lf\n", (double) minnorm, (double) maxnorm, (double) avgnorm, elapsed, start_time, end_time);
-}
-
-void eigen_mm::checkOrthogonality()
-{
-    MPI_Barrier(PETSC_COMM_WORLD);
-    double start_time = MPI_Wtime();
-
-    // residual = eye(neval) - V' * M * V
-
-    PetscInt N, neval;
-    MatGetSize(V, &N, &neval);
-
-    Vec ones;
-    VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, neval, &ones);
-    VecSet(ones, -1.0);
-
-    Mat residual, temp;
-    MatMatMult(M, V, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp);
-    MatTransposeMatMult(V, temp, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &residual);
-    MatDiagonalSet(residual, ones, ADD_VALUES);
-
-    PetscScalar norm;
-    MatNorm(residual, NORM_FROBENIUS, &norm);
-
-    VecDestroy(&ones);
-    MatDestroy(&residual);
-    MatDestroy(&temp);
-
-    MPI_Barrier(PETSC_COMM_WORLD);
-    double end_time = MPI_Wtime();
-    double elapsed = end_time - start_time;
-
-    if (opts.terse())
-        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf", elapsed, start_time, end_time, (double) norm);
-    else
-        PetscPrintf(PETSC_COMM_WORLD, "(Orthogonality Check) ||I - V'*V|| = %lf, Elapsed = %lf, Start = %lf, End = %lf\n", (double) norm, elapsed, start_time, end_time);
-}
-
 eigen_mm::eigen_mm() = default;
 
 eigen_mm::~eigen_mm(){
@@ -107,32 +25,27 @@ eigen_mm::~eigen_mm(){
     //MatDestroy(&M);
 };
 
-int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions *opts_in)
+int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions &opts_in)
 {
+    opts = opts_in;
+
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
 
-    K_global = K_in;
-    M_global = M_in;
-
-    opts = *opts_in;
-
-    // Initialize World Communicator
     MPI_Comm_rank(PETSC_COMM_WORLD, &(node.worldrank));
     MPI_Comm_size(PETSC_COMM_WORLD, &(node.worldsize));
 
-    // Initialize Evaluator Communicator
+    int count = 0;
     int resultlen;
     char processor_name[MPI_MAX_PROCESSOR_NAME];
-    MPI_Get_processor_name(processor_name, &resultlen);
-    uint32_t processor_id = adler32((unsigned char *) &processor_name[0], resultlen*sizeof(char));
+    uint32_t processor_id;
     uint32_t evaluator_id;
-
-    // Gather processor ids to root
-    int count = 0;
     std::vector<uint32_t> processor_ids;
     std::vector<uint32_t> evaluator_ids;
     std::map<uint32_t, uint32_t> processor_to_evaluator;
+
+    MPI_Get_processor_name(processor_name, &resultlen);
+    processor_id = adler32((unsigned char *) &processor_name[0], resultlen*sizeof(char));
     if (node.worldrank == 0) processor_ids.resize(node.worldsize);
     if (node.worldrank == 0) evaluator_ids.resize(node.worldsize);
     MPI_Gather(&processor_id, 1, MPI_UINT32_T, &processor_ids[0], 1, MPI_UINT32_T, 0, PETSC_COMM_WORLD);
@@ -156,54 +69,41 @@ int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions *opts_in)
     if (node.worldrank == 0) count = processor_to_evaluator.size();
     MPI_Bcast(&count, 1, MPI_INT, 0, PETSC_COMM_WORLD);
 
+    // multiply evaluator_id by the number of subproblems per evaluator
+    // determine number of processors per subproblem
+    // n_id = sppe * e_id + floor(e_rank / sppn)
+
+    MPI_Comm nodecomm;
+    int nodecomm_size, nodecomm_rank;
+    MPI_Comm_split(PETSC_COMM_WORLD, evaluator_id, node.worldrank, &nodecomm);
+    MPI_Comm_size(nodecomm, &nodecomm_size);
+    MPI_Comm_rank(nodecomm, &nodecomm_rank);
+
+    int sppn = nodecomm_size / opts.subproblemsperevaluator();
+    evaluator_id = evaluator_id * opts.subproblemsperevaluator() + nodecomm_rank / sppn;
+
     MPI_Comm_split(PETSC_COMM_WORLD, evaluator_id, node.worldrank, &(node.comm));
     MPI_Comm_size(node.comm, &(node.size));
     MPI_Comm_rank(node.comm, &(node.rank));
-    node.id = node.worldrank / node.size;
-    node.viewer = PETSC_VIEWER_STDOUT_(node.comm);
+    node.id = evaluator_id;
 
-    // Initialize Row Communicator
-    node.rowid = node.worldrank % node.size;
-    MPI_Comm_split(PETSC_COMM_WORLD, node.rowid, node.worldrank, &(node.rowcomm));
-    MPI_Comm_rank(node.rowcomm, &(node.rowrank));
-    MPI_Comm_size(node.rowcomm, &(node.rowsize));
-
-    node.nevaluators = count / opts.nodesperevaluator();
+    node.nevaluators = opts.subproblemsperevaluator() * count / opts.nodesperevaluator();
     opts.set_nevaluators(node.nevaluators);
-    opts.set_totalsubproblems(opts.nevaluators() * opts.subproblemsperevaluator());
-
-    if(opts.save_operators())
-    {
-        char K_filename[1024];
-        char M_filename[1024];
-        sprintf(K_filename, "%s_K", opts.operators_filename());
-        sprintf(M_filename, "%s_M", opts.operators_filename());
-
-        PetscViewer viewer;
-        PetscViewerBinaryOpen(PETSC_COMM_WORLD, K_filename, 
-            FILE_MODE_WRITE, &viewer);
-        MatView(K_in, viewer);
-        PetscViewerDestroy(&viewer);
-
-        PetscViewerBinaryOpen(PETSC_COMM_WORLD, M_filename, 
-            FILE_MODE_WRITE, &viewer);
-        MatView(M_in, viewer);
-        PetscViewerDestroy(&viewer);
-    }
-
-    scatterInputMats(K_in, M_in);
-
+    opts.set_totalsubproblems(opts.nevaluators());
     node.neval = 0;
+
+    MatCreateRedundantMatrix(K_in, node.nevaluators, node.comm, MAT_INITIAL_MATRIX, &K);
+    MatCreateRedundantMatrix(M_in, node.nevaluators, node.comm, MAT_INITIAL_MATRIX, &M);
 
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
 
     // report init time
-    if (opts.terse())
+    if (opts.terse() && opts.debug())
         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf\n", elapsed, start_time, end_time);
-    else
-        PetscPrintf(PETSC_COMM_WORLD, "(init) Elapsed: %lf, Start: %lf, End: %lf\n", elapsed, start_time, end_time);
+    else if (opts.debug())
+        PetscPrintf(PETSC_COMM_WORLD, "(init) Elapsed: %lf\n", elapsed);
 }
 
 int eigen_mm::solve(Mat *V_out, Vec *lambda_out)
@@ -211,274 +111,30 @@ int eigen_mm::solve(Mat *V_out, Vec *lambda_out)
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
 
-    PetscInt N;
-    MatGetSize(K_global, &N, NULL);
-    MatCreateDense(PETSC_COMM_WORLD, PETSC_DECIDE, PETSC_DECIDE, N, N, NULL, &V);
-    MatSetUp(V);
-    VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, N, &lambda);
-
     if (opts.R() <= opts.L() && opts.debug()) PetscPrintf(PETSC_COMM_WORLD, "finding upper bound\n");
     if (opts.R() <= opts.L()) findUpperBound();
+    
+    if (opts.nevals() > 0 && opts.debug()) PetscPrintf(PETSC_COMM_WORLD, "rescaling interval to contain first %d eigenvalues\n", opts.nevals());
+    if (opts.nevals() > 0) rescaleInterval();
+    
     if (opts.debug()) PetscPrintf(PETSC_COMM_WORLD, "forming subproblems\n");
     formSubproblems();
+    
     if (opts.debug()) PetscPrintf(PETSC_COMM_WORLD, "solving subproblems\n");
     PetscInt neval = solveSubproblems();
+    
     if (opts.debug()) PetscPrintf(PETSC_COMM_WORLD, "forming eigenbasis\n");
     formEigenbasis(neval);
-    if(opts.save_correctness()) checkCorrectness();
-    (*V_out) = V;
-    (*lambda_out) = lambda;
 
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
 
-    if (opts.terse())
+    if (opts.terse() && opts.debug())
         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf\n", elapsed, start_time, end_time);
-    else
-        PetscPrintf(PETSC_COMM_WORLD, "(solve) Elapsed: %lf, Start: %lf, End: %lf\n", elapsed, start_time, end_time);
+    else if (opts.debug())
+        PetscPrintf(PETSC_COMM_WORLD, "(solve) Elapsed: %lf, Eigenvalues found: %d\n", elapsed, (int) neval);
 }
-
-PetscReal eigen_mm::find_amax(PetscInt k)
-{
-    PetscReal bleft, bright, split;
-    PetscInt iter, ec, err;
-
-    bleft = 0;
-    bright = opts.R();
-    iter = 1;
-    MatGetSize(K_global, &err, NULL);
-    while(abs(err) > opts.nevt() && iter < opts.splitmaxiters())
-    {
-        split = (bleft + bright) / 2;
-        countInterval(split, opts.R(), &ec);
-        err = ec - k;
-        if (err > 0) { bleft  = split; }
-        else         { bright = split; }
-        iter++;
-    }
-    return split;
-}
-PetscReal eigen_mm::find_b(PetscInt k, PetscReal a)
-{
-    PetscReal bleft, bright, split;
-    PetscInt iter, ec, err;
-
-    bleft = a;
-    bright = opts.R();
-    iter = 1;
-    MatGetSize(K_global, &err, NULL);
-    while(abs(err) > opts.nevt() && iter < opts.splitmaxiters())
-    {
-        split = (bleft + bright) / 2;
-        countInterval(a, split, &ec);
-        err = ec - k;
-        if (err < 0) { bleft  = split; }
-        else         { bright = split; }
-        iter++;
-    }
-    return split;
-}
-
-int eigen_mm::solvetime_exp()
-{
-    MPI_Barrier(PETSC_COMM_WORLD);
-    double start_time = MPI_Wtime();
-
-    // obtain (L, R, ns) from solver options (use nv for ns since p will be 0)
-
-    // determine upper bound if R is invalid
-    if (opts.R() <= opts.L()) findUpperBound();
-
-    // hard code kmax, kmin, nk
-    PetscInt kmin = 100;
-    PetscInt kmax = 4096;
-    PetscInt nk = 10;
-    PetscInt kstep = (kmax - kmin) / (nk - 1);
-
-    // initialize arrays a[ns], b[ns], k[nk], e[nk*ns]
-    std::vector<PetscReal> a(opts.nv() * nk);
-    std::vector<PetscReal> b(opts.nv() * nk);
-    std::vector<PetscReal> e(opts.nv() * nk);
-    std::vector<PetscInt>  d(opts.nv() * nk);
-    std::vector<PetscInt>  k(nk);
-
-    PetscReal amin = opts.L();
-    PetscReal amax, astep;
-
-    PetscPrintf(PETSC_COMM_WORLD, "Starting experiment:\n");
-    for (int i = 0; i < nk; i++)
-    {
-        amax = find_amax(k[i]);
-        astep = (amax - amin) / (opts.nv() - 1);
-        if (opts.terse())
-            PetscPrintf(PETSC_COMM_WORLD, "%d %lf %lf\n", k[i], (double)opts.L(), (double)amax);
-        else
-            PetscPrintf(PETSC_COMM_WORLD, "  (k = %d) Checking starting points in interval [%lf, %lf]\n", k[i], (double)opts.L(), (double)amax);
-        for (int j = 0; j < opts.nv(); j++)
-        {
-            int idx = i*opts.nv() + j;
-            a[idx] = amin + astep * j;
-            b[idx] = find_b(k[i], a[idx]);
-
-            MPI_Barrier(PETSC_COMM_WORLD);
-            double exp_start_time = MPI_Wtime();
-
-            PetscReal interval[2] = {a[idx], b[idx]};
-            PetscInt neval = solveSubProblem(interval, 0);
-
-            MPI_Barrier(PETSC_COMM_WORLD);
-            double exp_end_time = MPI_Wtime();
-            d[idx] = neval - k[i];
-            e[idx] = exp_end_time - exp_start_time;
-
-            if (opts.terse())
-                PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %d %d\n", 
-                    (double)a[idx], (double)b[idx], (double)e[idx], neval, d[idx]);
-            else
-                PetscPrintf(PETSC_COMM_WORLD, "    Interval [%lf, %lf]: Time elapsed: %lf, Eigenvalues found: %d, Difference from expected: %d\n", 
-                    (double)a[idx], (double)b[idx], (double)e[idx], neval, d[idx]);
-        }
-    }
-
-    MPI_Barrier(PETSC_COMM_WORLD);
-    double end_time = MPI_Wtime();
-    double elapsed = end_time - start_time;
-
-    PetscPrintf(PETSC_COMM_WORLD, "Finished with all experiments in %lf seconds.\n", elapsed);
-}
-
-Mat& eigen_mm::getK(){
-    return K;
-}
-
-Mat& eigen_mm::getM(){
-    return M;
-}
-
-//void eigen_mm::print_eig_val_real(){
-//    print_vector(eig_val_real, 0, "eigenvalues (real part):", comm);
-//}
-
-//void eigen_mm::print_eig_val_imag(){
-//    print_vector(eig_val_imag, 0, "eigenvalues (imaginary part):", comm);
-//}
-
-void eigen_mm::print_eig_val(){
-
-    int rank;
-    MPI_Comm_rank(comm, &rank);
-
-    if(!store_eigenpairs){
-        if(rank==0) printf("set store_eigenpairs to true to store eigenpairs in the wrapper class.\n");
-    }
-
-    MPI_Barrier(comm);
-    if(rank==0){
-        printf("\neigenvalues, size = %ld: \n", eig_val_real.size());
-        for (unsigned i = 0; i < eig_val_real.size(); i++) {
-            std::cout << i << "\t" << eig_val_real[i] << " + " << eig_val_imag[i] << "i" << std::endl;
-        }
-        printf("\n");
-    }
-
-    MPI_Barrier(comm);
-}
-/*
-void eigen_mm::print_eig_vec_real(int ran){
-    // if ran >= 0 print the vector elements on proc with rank = ran
-    // otherwise print the vector elements on all processors in order. (first on proc 0, then proc 1 and so on.)
-    std::string text = "real part of eigenvector ";
-    for(int i = 0; i < eig_vec_real.size(); i++){
-        print_vector(eig_vec_real[i], ran, text + std::to_string(i), comm);
-    }
-}
-
-void eigen_mm::print_eig_vec_imag(int ran){
-    // if ran >= 0 print the vector elements on proc with rank = ran
-    // otherwise print the vector elements on all processors in order. (first on proc 0, then proc 1 and so on.)
-    std::string text = "imaginary part of eigenvector ";
-    for(int i = 0; i < eig_vec_imag.size(); i++){
-        print_vector(eig_vec_imag[i], ran, text + std::to_string(i), comm);
-    }
-}
-*/
-void eigen_mm::print_eig_vec(int ran){
-    // if ran >= 0 print the vector elements on proc with rank = ran
-    // otherwise print the vector elements on all processors in order. (first on proc 0, then proc 1 and so on.)
-
-    int rank, nprocs;
-    MPI_Comm_size(comm, &nprocs);
-    MPI_Comm_rank(comm, &rank);
-
-    if(!store_eigenpairs){
-        if(rank==0) printf("set store_eigenpairs to true to store eigenpairs in the wrapper class.\n");
-    }
-
-    MPI_Barrier(comm);
-    for(int i = 0; i < eig_vec_real.size(); i++) {
-
-        if (ran >= 0) {
-            if (rank == ran) {
-                printf("\neigenvector %d on proc = %d, size = %ld: \n", i, rank, eig_vec_real.size());
-                for (unsigned j = 0; j < eig_vec_real[i].size(); j++) {
-                    std::cout << j << "\t" << eig_vec_real[i][j] << " + " << eig_vec_imag[i][j] << "i" << std::endl;
-                }
-                printf("\n");
-            }
-        } else {
-            for (unsigned proc = 0; proc < nprocs; proc++) {
-                MPI_Barrier(comm);
-                if (rank == proc) {
-                    printf("\neigenvector %d on proc = %d, size = %ld: \n", i, proc, eig_vec_real.size());
-                    for (unsigned j = 0; j < eig_vec_real[i].size(); j++) {
-                        std::cout << j << "\t" << eig_vec_real[i][j] << " + " << eig_vec_imag[i][j] << "i" << std::endl;
-                    }
-                    printf("\n");
-                }
-                MPI_Barrier(comm);
-            }
-        }
-
-    }
-    MPI_Barrier(comm);
-}
-
-
-int eigen_mm::viewK(){
-
-    if (node.id == 0) MatView(K, node.viewer);
-
-    return 0;
-}
-
-int eigen_mm::viewM(){
-
-    if (node.id == 0) MatView(M, node.viewer);
-    return 0;
-}
-
-
-int eigen_mm::get_eig_num(){
-    return eig_num;
-}
-
-double* eigen_mm::get_eig_val_real(){
-    return &eig_val_real[0];
-}
-
-double* eigen_mm::get_eig_val_imag(){
-    return &eig_val_imag[0];
-}
-
-double* eigen_mm::get_eig_vec_real(int i){
-    return &eig_vec_real[i][0];
-}
-
-double* eigen_mm::get_eig_vec_imag(int i){
-    return &eig_vec_imag[i][0];
-}
-
 
 // ==================== World ====================
 void eigen_mm::findUpperBound()
@@ -571,115 +227,234 @@ void eigen_mm::findUpperBound()
     double elapsed = end_time - start_time;
 
     // report findUpperBound timing
-    if (opts.terse())
+    if (opts.terse() && opts.debug())
         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf\n", elapsed, start_time, end_time, (double) lR);
-    else
-        PetscPrintf(PETSC_COMM_WORLD, "(findUpperBound) Elapsed: %lf, Start: %lf, End: %lf, Upper Bound: %lf\n", elapsed, start_time, end_time, (double) lR);
+    else if (opts.debug())
+        PetscPrintf(PETSC_COMM_WORLD, "(findUpperBound) Elapsed: %lf, Upper Bound: %lf\n", elapsed, (double) lR);
+}
+void eigen_mm::rescaleInterval()
+{
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double start_time = MPI_Wtime();
+
+    PetscReal lR;
+
+    if (node.id == 0)
+    {
+        PetscReal bleft, bright, split, err;
+        PetscInt iter, ec, N;
+
+        MatGetSize(K, &N, NULL);
+
+        bleft  = opts.L();
+        bright = opts.R();
+        iter   = 1;
+        err    = (PetscReal) N;
+        while (abs(err) > 10 & iter < 20)
+        {
+            split = (bleft + bright)/2.0;
+            countInterval(opts.L(), split, &ec);
+            err = ec - opts.nevals();
+            if (err > 0)
+                bright = split;
+            else
+                bleft = split;
+            iter++;
+        }
+
+        lR = split;
+    }
+    MPI_Bcast(&lR, 1, MPIU_REAL, 0, PETSC_COMM_WORLD);
+
+    opts.set_R(lR);
+
+    MPI_Barrier(PETSC_COMM_WORLD);
+    double end_time = MPI_Wtime();
+    double elapsed = end_time - start_time;
+
+    // report findUpperBound timing
+    if (opts.terse() && opts.debug())
+        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %lf\n", elapsed, start_time, end_time, (double) lR);
+    else if (opts.debug())
+        PetscPrintf(PETSC_COMM_WORLD, "(rescaleInterval) Elapsed: %lf, Upper Bound: %lf\n", elapsed, (double) lR);
 }
 void eigen_mm::formSubproblems()
 {
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
 
-    PetscReal leafintervals[10000];
-    PetscReal splitintervals[10000];
-    PetscInt  leafcounts[10000];
+    PetscInt N;
+    MatGetSize(K, &N, NULL);
 
-    PetscInt fleft, fright, noutput, split_index, leaf_index;
-    PetscReal split;
-    
-    splitintervals[0] = opts.L();
-    splitintervals[1] = opts.R();
+    PetscInt n = node.nevaluators;
 
-    PetscInt nleaves = 0;
-    int current_split = 1;
-    int split_max_depth = 20;
-    int job0 = node.id;
-    int jobstride = node.nevaluators;
-    int njobs = 1;
+    PetscInt Nbar, Nhat;
+    PetscReal err;
+    std::vector<PetscInt> rev(n+1);
+    std::vector<PetscInt> C(n);
+    std::vector<PetscReal> x(n+1);
 
-    if (opts.totalsubproblems() == 1)
+    PetscReal bestCerr = N;
+    std::vector<PetscInt> bestRev(n+1);
+    std::vector<PetscInt> bestC(n);
+    std::vector<PetscReal> bestX(n+1);
+
+    if (n > 1)
     {
-        nleaves = 1;
-        leafintervals[0] = splitintervals[0];
-        leafintervals[1] = splitintervals[1];
-    }
-
-    while (nleaves       < opts.totalsubproblems() && 
-           njobs         > 0 && 
-           current_split < split_max_depth)
-    {
-        for (int job = job0; job < njobs; job += jobstride)
+        // (root node) Initialize parameters and x, broadcast to all processes
+        if (node.id == 0)
         {
-            splitSubProblem(splitintervals[2*job + 0], splitintervals[2*job + 1], 
-                &split, &fleft, &fright);
-            leafintervals[2*nleaves + 4*job + 0] = splitintervals[2*job + 0];
-            leafintervals[2*nleaves + 4*job + 1] = split;
-            leafintervals[2*nleaves + 4*job + 2] = split;
-            leafintervals[2*nleaves + 4*job + 3] = splitintervals[2*job + 1];
-            leafcounts[nleaves + 2*job + 0] = fleft;
-            leafcounts[nleaves + 2*job + 1] = fright;
+            rev[0] = N;
+            rev[n] = (opts.nevals() > 0) ? (N - opts.nevals()) : 0;
+            Nbar = rev[0] - rev[n];
+            Nhat = Nbar / n;
+
+            x[0] = opts.L();
+            x[n] = opts.R();
+            PetscReal step = (x[n] - x[0])/ (PetscReal) n;
+            for (int i = 1; i < n; i++)
+                x[i] = x[0] + i*step;
         }
+        MPI_Bcast(&Nbar,   1,   MPIU_INT,  0, PETSC_COMM_WORLD);
+        MPI_Bcast(&Nhat,   1,   MPIU_INT,  0, PETSC_COMM_WORLD);
+        MPI_Bcast(&rev[0], 1,   MPIU_INT,  0, PETSC_COMM_WORLD);
+        MPI_Bcast(&rev[n], 1,   MPIU_INT,  0, PETSC_COMM_WORLD);
+        MPI_Bcast(&x[0],   n+1, MPIU_REAL, 0, PETSC_COMM_WORLD);
 
-        for (int job = 0; job < njobs; job++)
+        // stage 1: global refinement
+        for (int k = 0; k < opts.nk(); k++)
         {
-            MPI_Bcast(&leafintervals[2*nleaves + 4*job + 0], 1, MPIU_REAL, (job % node.nevaluators)*node.size, PETSC_COMM_WORLD);
-            MPI_Bcast(&leafintervals[2*nleaves + 4*job + 1], 1, MPIU_REAL, (job % node.nevaluators)*node.size, PETSC_COMM_WORLD);
-            MPI_Bcast(&leafintervals[2*nleaves + 4*job + 2], 1, MPIU_REAL, (job % node.nevaluators)*node.size, PETSC_COMM_WORLD);
-            MPI_Bcast(&leafintervals[2*nleaves + 4*job + 3], 1, MPIU_REAL, (job % node.nevaluators)*node.size, PETSC_COMM_WORLD);
-            MPI_Bcast(&leafcounts[nleaves + 2*job + 0],    1, MPIU_INT, (job % node.nevaluators)*node.size, PETSC_COMM_WORLD);
-            MPI_Bcast(&leafcounts[nleaves + 2*job + 1],    1, MPIU_INT, (job % node.nevaluators)*node.size, PETSC_COMM_WORLD);
-        }
-        MPI_Barrier(PETSC_COMM_WORLD);
+            if (node.id > 0) rev[node.id] = computeDev_exact(x[node.id], PETSC_TRUE);
+            
+            for (int i = 1; i < n; i++)
+                MPI_Bcast(&rev[i], 1, MPIU_INT, i*node.size, PETSC_COMM_WORLD);
 
-        noutput     = 2*njobs;
-        split_index = 0;
-        leaf_index  = 0;
-        for (int i = 0; i < noutput; i++)
-        {
-            if (leafcounts[nleaves + i] > opts.nevt() &&
-                nleaves + noutput < opts.totalsubproblems() &&
-                current_split < split_max_depth - 1)
+            if (node.id == 0)
             {
-                splitintervals[2*split_index + 0] = leafintervals[2*nleaves + 2*i + 0];
-                splitintervals[2*split_index + 1] = leafintervals[2*nleaves + 2*i + 1];
-                split_index++;
+                err = 0.0;
+                for (int i = 0; i < n; i++)
+                {
+                    C[i] = rev[i] - rev[i+1];
+                    err = std::max((PetscReal) abs(C[i] - Nhat), err);
+                }
+                err = err / (PetscReal) Nbar;
+            }
+            MPI_Bcast(&err,      1, MPIU_REAL, 0, PETSC_COMM_WORLD);
+            MPI_Bcast(&rev[0], n+1, MPIU_INT,  0, PETSC_COMM_WORLD);
+            MPI_Bcast(&C[0],     n, MPIU_INT,  0, PETSC_COMM_WORLD);
+
+            // update bests
+            if (err < bestCerr)
+            {
+                bestX = x;
+                bestRev = rev;
+                bestC = C;
+                bestCerr = err;
+            }
+
+            if (k < opts.nk()-1)
+            {
+                // global refinement step
+                if (node.worldrank == 0) global_refine(n, x, C, Nhat);
+                MPI_Bcast(&x[0],   n+1, MPIU_REAL, 0, PETSC_COMM_WORLD);
             }
             else
             {
-                leafintervals[2*(nleaves + noutput + leaf_index) + 0] = leafintervals[2*(nleaves + i) + 0];
-                leafintervals[2*(nleaves + noutput + leaf_index) + 1] = leafintervals[2*(nleaves + i) + 1];
-                leafcounts[nleaves + noutput + leaf_index] = leafcounts[nleaves + i];
-                leaf_index++;
+                // set data equal to the best observed
+                x = bestX;
+                rev = bestRev;
+                C = bestC;
+                err = bestCerr;
+            }
+            
+        }
+
+        // stage 2: local refinement
+        for (int b = 0; b < opts.nb(); b++)
+        {
+            // even pass
+            if (node.id % 2 == 0 && node.id < n-1)
+            {
+                // determine if interval pair can be balanced
+                PetscReal ratio = (std::max(C[node.id], C[node.id+1]) != 0) 
+                                ?  std::min(C[node.id], C[node.id+1]) 
+                                /  std::max(C[node.id], C[node.id+1]) 
+                                :  0.0;
+                bool cond1 = C[node.id] > Nhat && C[node.id+1] < Nhat;
+                bool cond2 = C[node.id] < Nhat && C[node.id+1] > Nhat;
+                bool cond  = cond1 || cond2;
+
+
+                // if valid, balance interval pair
+                if (ratio < opts.splittol() && cond)
+                {
+                    balance_intervals(  x[node.id],   x[node.id+2],   &x[node.id+1], 
+                                      rev[node.id], rev[node.id+2], &rev[node.id+1],
+                                       &C[node.id],  &C[node.id+1]);
+                }
+            }
+            MPI_Barrier(PETSC_COMM_WORLD);
+            for (int i = 0; i < n; i+=2)
+            {
+                MPI_Bcast(&x[i+1],   1, MPIU_REAL, i*node.size, PETSC_COMM_WORLD);
+                MPI_Bcast(&rev[i+1], 1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
+                MPI_Bcast(&C[i],     1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
+                MPI_Bcast(&C[i+1],   1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
+            }
+
+            // odd pass
+            if (node.id % 2 == 1 && node.id < n-1)
+            {
+                // determine if interval pair can be balanced
+                PetscReal ratio = (std::max(C[node.id], C[node.id+1]) != 0) 
+                                ?  std::min(C[node.id], C[node.id+1]) 
+                                /  std::max(C[node.id], C[node.id+1]) 
+                                :  0.0;
+                bool cond1 = C[node.id] > Nhat && C[node.id+1] < Nhat;
+                bool cond2 = C[node.id] < Nhat && C[node.id+1] > Nhat;
+                bool cond  = cond1 || cond2;
+
+
+                // if valid, balance interval pair
+                if (ratio < opts.splittol() && cond)
+                {
+                    balance_intervals(  x[node.id],   x[node.id+2],   &x[node.id+1], 
+                                      rev[node.id], rev[node.id+2], &rev[node.id+1],
+                                       &C[node.id],  &C[node.id+1]);
+                }
+            }
+            MPI_Barrier(PETSC_COMM_WORLD);
+            for (int i = 1; i < n; i+=2)
+            {
+                MPI_Bcast(&x[i+1],   1, MPIU_REAL, i*node.size, PETSC_COMM_WORLD);
+                MPI_Bcast(&rev[i+1], 1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
+                MPI_Bcast(&C[i],     1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
+                MPI_Bcast(&C[i+1],   1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
             }
         }
-        for (int i = 0; i < leaf_index; i++)
+        
+        for (int i = 0; i < n; i++)
         {
-            leafintervals[2*(nleaves + i) + 0] = leafintervals[2*(nleaves + noutput + i) + 0];
-            leafintervals[2*(nleaves + i) + 1] = leafintervals[2*(nleaves + noutput + i) + 1];
-            leafcounts[nleaves + i] = leafcounts[nleaves + noutput + i];
+            intervals.push_back(x[i]);
+            intervals.push_back(x[i+1]);
         }
-        nleaves += leaf_index;
-        njobs   = split_index;
-        MPI_Barrier(PETSC_COMM_WORLD);
-
-        current_split++;
     }
-    for (int i = 0; i < nleaves; i++)
+    else
     {
-        intervals.push_back(leafintervals[2*i+0]);
-        intervals.push_back(leafintervals[2*i+1]);
+        intervals.push_back(opts.L());
+        intervals.push_back(opts.R());
     }
+
 
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
 
     // report formSubproblems timing
-    if (opts.terse())
-        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %d\n", elapsed, start_time, end_time, (int) nleaves);
-    else
-        PetscPrintf(PETSC_COMM_WORLD, "(formSubproblems) Elapsed: %lf, Start: %lf, End: %lf, Total Subproblems: %d\n", elapsed, start_time, end_time, (int) nleaves);
+    if (opts.terse() && opts.debug())
+        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %d\n", elapsed, start_time, end_time, (int) n);
+    else if (opts.debug())
+        PetscPrintf(PETSC_COMM_WORLD, "(formSubproblems) Elapsed: %lf, Total Subproblems: %d\n", elapsed, (int) n);
 }
 PetscInt eigen_mm::solveSubproblems()
 {
@@ -691,8 +466,9 @@ PetscInt eigen_mm::solveSubproblems()
     int njobs      = intervals.size() / 2;
     PetscInt neval;
     PetscInt in_neval;
+    PetscInt retval = 0;
 
-    neval = solveSubProblem(&intervals[node.id * 2 * opts.subproblemsperevaluator()], job0);
+    neval = solveSubProblem(&intervals[2 * node.id], job0);
 
     std::vector<PetscInt> eval_counts(node.nevaluators);
     std::vector<PetscInt> eval_starts(node.nevaluators);
@@ -707,32 +483,21 @@ PetscInt eigen_mm::solveSubproblems()
         eval_starts[i] = eval_starts[i-1] + eval_counts[i-1];
 
     node.neval = eval_counts[node.id];
-    node.neval0 = eval_starts[node.id];
+    node.neval0 = eval_starts[node.id];        
 
-    if (node.worldrank == 0)
-    {
-        printf("Eigenvalues per node: [");
-        for (int i = 0; i < node.nevaluators; i++)
-            printf("%d ", eval_counts[i]);
-        printf("]\n");
-
-        printf("Eigenvalue starts per node: [");
-        for (int i = 0; i < node.nevaluators; i++)
-            printf("%d ", eval_starts[i]);
-        printf("]\n");
-    }
-        
+    for (int i = 0; i < node.nevaluators; i++)
+        retval += eval_counts[i];
 
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
 
-    if (opts.terse())
-        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %d\n", elapsed, start_time, end_time, (int) neval);
-    else
-        PetscPrintf(PETSC_COMM_WORLD, "(solveSubproblems) Elapsed: %lf, Start: %lf, End: %lf, Total Eigenpairs Found: %d\n", elapsed, start_time, end_time, (int) neval);
+    if (opts.terse() && opts.debug())
+        PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %d\n", elapsed, start_time, end_time, (int) retval);
+    else if (opts.debug())
+        PetscPrintf(PETSC_COMM_WORLD, "(solveSubproblems) Elapsed: %lf, Total Eigenpairs Found: %d\n", elapsed, (int) retval);
 
-    return neval;
+    return retval;
 }
 void eigen_mm::formEigenbasis(PetscInt neval)
 {
@@ -740,10 +505,15 @@ void eigen_mm::formEigenbasis(PetscInt neval)
     double start_time = MPI_Wtime();
 
     Vec v;
+    Vec t1, t2;
     PetscInt lm, lm0, N;
     PetscReal lam, *v_data;
 
     MatGetSize(K, &N, NULL);
+    MatCreateDense(PETSC_COMM_WORLD, PETSC_DECIDE, PETSC_DECIDE, N, neval, NULL, &V);
+    MatSetUp(V);
+    VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, neval, &lambda);
+
     VecCreateMPI(node.comm, PETSC_DECIDE, N, &v);
     VecGetLocalSize(v, &lm);
     MPI_Exscan(&lm, &lm0, 1, MPIU_INT, MPI_SUM, node.comm);
@@ -754,6 +524,10 @@ void eigen_mm::formEigenbasis(PetscInt neval)
     for (int i = 0; i < lm; i++)
         idxm[i] = lm0 + i;
 
+
+    VecCreateMPI(node.comm, PETSC_DECIDE, N, &t1);
+    VecCreateMPI(node.comm, PETSC_DECIDE, N, &t2);
+
     for (int i = 0; i < node.neval; i++)
     {
         idxn[0] = node.neval0 + i;
@@ -762,6 +536,19 @@ void eigen_mm::formEigenbasis(PetscInt neval)
         MatSetValues(V, lm, &idxm[0], 1, &idxn[0], v_data, INSERT_VALUES);
         VecRestoreArray(v, &v_data);
         VecSetValue(lambda, idxn[0], lam, INSERT_VALUES);
+
+        if (opts.save_correctness())
+        {
+            PetscReal residual;
+
+            // K * vk - lambdak * M * vk
+            MatMult(K, v, t1);
+            MatMult(M, v, t2);
+            VecAXPY(t1, -lam, t2);
+            VecNorm(t1, NORM_2, &residual);
+
+            residuals.push_back(residual);
+        }
     }
     MPI_Barrier(PETSC_COMM_WORLD);
     MatAssemblyBegin(V, MAT_FINAL_ASSEMBLY);
@@ -788,30 +575,39 @@ void eigen_mm::formEigenbasis(PetscInt neval)
         PetscViewerDestroy(&viewer);
     }
 
+    if (opts.save_correctness() && node.rank == 0)
+    {
+        char correctness_filename[2048];
+        sprintf(correctness_filename, "%s_correctness_%d", opts.correctness_filename(), node.id);
+        std::ofstream output_file(correctness_filename);
+        std::ostream_iterator<PetscReal> output_iterator(output_file, "\n");
+        std::copy(residuals.begin(), residuals.end(), output_iterator);
+    }
+
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
 
-    if (opts.terse())
+    VecDestroy(&v);
+    VecDestroy(&t1);
+    VecDestroy(&t2);
+    EPSDestroy(&eps);
+
+    if (opts.terse() && opts.debug())
         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf\n", elapsed, start_time, end_time);
-    else
-        PetscPrintf(PETSC_COMM_WORLD, "(formEigenbasis) Elapsed: %lf, Start: %lf, End: %lf\n", elapsed, start_time, end_time);
+    else if (opts.debug())
+        PetscPrintf(PETSC_COMM_WORLD, "(formEigenbasis) Elapsed: %lf\n", elapsed);
 }
 // ================================================
 
 // ==================== Evaluator ====================
-void eigen_mm::scatterInputMats(Mat &K_in, Mat &M_in)
-{
-    MatCreateRedundantMatrix(K_in, node.nevaluators, node.comm, MAT_INITIAL_MATRIX, &K);
-    MatCreateRedundantMatrix(M_in, node.nevaluators, node.comm, MAT_INITIAL_MATRIX, &M);
-}
 PetscInt eigen_mm::solveSubProblem(PetscReal *intervals, int job)
 {
     MPI_Barrier(node.comm);
     double start_time = MPI_Wtime();
 
-    if(opts.debug()) PetscPrintf(node.comm, "Solving interval [%lf, %lf]\n", 
-        intervals[0], intervals[2*opts.subproblemsperevaluator()-1]);
+    if(opts.debug()) PetscPrintf(node.comm, "[Node %d]: Solving interval [%lf, %lf]\n", 
+        node.id, intervals[0], intervals[1]);
 
     // Set up solver
     PetscInt nconv;
@@ -823,7 +619,7 @@ PetscInt eigen_mm::solveSubProblem(PetscReal *intervals, int job)
         PetscOptionsInsertString(nullptr, "-st_pc_type cholesky");
         PetscOptionsInsertString(nullptr, "-st_pc_factor_mat_solver_package mumps");
         PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_13 1");
-        PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_14 80");
+        PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_14 120");
     }
     else if (opts.ksp_solver_type() == 1)
     {
@@ -832,27 +628,21 @@ PetscInt eigen_mm::solveSubProblem(PetscReal *intervals, int job)
     }
 
     EPSCreate(node.comm,&eps);
+
     EPSSetOperators(eps,K,M);
     EPSSetProblemType(eps,EPS_GHEP);
     EPSSetFromOptions(eps);
+
     if (opts.eps_solver_type() == 0) 
     {
-        std::vector<PetscReal> subint(opts.subproblemsperevaluator()+1);
-        for (int i = 0; i < opts.subproblemsperevaluator(); i++)
-            subint[i] = intervals[2*i];
-        subint[opts.subproblemsperevaluator()] = intervals[2*opts.subproblemsperevaluator()-1];
         EPSSetWhichEigenpairs(eps, EPS_ALL);
-        EPSSetInterval(eps, intervals[0], intervals[2*opts.subproblemsperevaluator()-1]);
-        EPSKrylovSchurSetPartitions(eps, opts.subproblemsperevaluator());
-        EPSKrylovSchurSetSubintervals(eps, &subint[0]);
-        for (int i = 0; i < opts.subproblemsperevaluator()+1; i++)
-            PetscPrintf(node.comm, "(%d) Subint[%d] = %lf\n", node.id, i, subint[i]);
+        EPSSetInterval(eps, intervals[0], intervals[1]);
+        EPSKrylovSchurSetPartitions(eps, 1);
+        EPSKrylovSchurSetSubintervals(eps, intervals);
     }
 
-    // Solve
     EPSSolve(eps);
 
-    // Process results
     EPSGetConverged(eps, &nconv); 
 
     node.neval += nconv;
@@ -861,10 +651,10 @@ PetscInt eigen_mm::solveSubProblem(PetscReal *intervals, int job)
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
 
-    if (opts.terse())
+    if (opts.debug() && opts.terse())
         PetscPrintf(node.comm, "%d %d %lf %lf %lf %d\n", node.id, job, elapsed, start_time, end_time, (int) nconv);
     else if (opts.debug())
-        PetscPrintf(node.comm, "(solveSubproblem) Evaluator: %d, Subinterval: %d, Elapsed: %lf, Start: %lf, End: %lf, Number of Eigenpairs: %d\n", node.id, job, elapsed, start_time, end_time, (int) nconv);
+        PetscPrintf(node.comm, "(solveSubproblem) Evaluator: %d, Subinterval: %d, Elapsed: %lf, Number of Eigenpairs: %d\n", node.id, job, elapsed, (int) nconv);
 
     return nconv;
 }
@@ -899,11 +689,126 @@ void eigen_mm::splitSubProblem(PetscReal a, PetscReal b,
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
 
-    if (opts.terse())
+    if (opts.terse() && opts.debug())
         PetscPrintf(node.comm, "%d %lf %lf %lf %d %d %lf %lf %lf", node.id, elapsed, start_time, end_time, (int) ec_left, (int) ec_right, (double) a, (double) b, (double) split);
-    else
-        PetscPrintf(node.comm, "(splitSubproblem) Evaluator: %d, Elapsed: %lf, Start: %lf, End: %lf, Left Count: %d, Right Count: %d, a = %lf, b = %lf, c = %lf\n", node.id, elapsed, start_time, end_time, (int) ec_left, (int) ec_right, (double) a, (double) b, (double) split);
+    else if (opts.debug())
+        PetscPrintf(node.comm, "(splitSubproblem) Evaluator: %d, Elapsed: %lf, Left Count: %d, Right Count: %d, a = %lf, b = %lf, c = %lf\n", node.id, elapsed, (int) ec_left, (int) ec_right, (double) a, (double) b, (double) split);
 }
+
+void eigen_mm::global_refine(PetscInt n,
+                             std::vector<PetscReal> &x, 
+                             std::vector<PetscInt>   C, 
+                             PetscInt Nhat)
+{
+    std::vector<PetscReal> x2(n+1);
+    x2[0] = x[0];
+    x2[n] = x[n];
+
+    PetscReal xi, xj, xjm1, xp, a;
+    PetscInt tempcount, prevcount, count;
+    PetscInt j = 0;
+
+    xi = x[0];
+    for (int i = 0; i < n-1; i++)
+    {
+        while (j <= n && x[j] <= xi) { j++; }
+        xj   = x[j];
+        xjm1 = x[j-1];
+
+        tempcount = ((xj - xi) / (xj - xjm1) * C[j-1]);
+        count = tempcount;
+
+        xp = -1.0;
+        prevcount = 0;
+        while (xp < 0)
+        {
+            if (count > Nhat)
+            {
+                a = ((PetscReal) (Nhat - prevcount)) / (PetscReal) (count - prevcount);
+                xp = xi + a * (xj - xi);
+            }
+            else if (count < Nhat)
+            {
+                prevcount = prevcount + tempcount;
+                xi = xj;
+                xjm1 = x[j];
+                xj = x[j+1];
+                j++;
+                tempcount = ((xj - xi) / (xj - xjm1) * C[j-1]);
+                count = prevcount + tempcount;
+            }
+            else
+            {
+                xp = xj;
+            }
+        }
+        x2[i+1] = xp;
+        xi      = xp;
+    }
+
+    x = x2;
+}
+void eigen_mm::balance_intervals(PetscReal   a, PetscReal   b, PetscReal   *c, 
+                                 PetscInt reva, PetscInt revb, PetscInt *revc,
+                                 PetscInt  *Cl, PetscInt  *Cr)
+{
+    PetscInt iter = 1;
+    PetscReal C_a_c = reva - *revc;
+    PetscReal C_c_b = *revc - revb;
+    PetscReal L, R, ratio;
+    if (C_a_c < C_c_b)
+    {
+        L = *c;
+        R =  b;
+    }
+    else
+    {
+        L =  a;
+        R = *c;
+    }
+    ratio = (std::max(C_a_c, C_c_b) > 0) 
+          ?  std::min(C_a_c, C_c_b) 
+          /  std::max(C_a_c, C_c_b)
+          :  0.0;
+
+    PetscInt  bestsplit = *c;
+    PetscReal bestratio = ratio;
+    PetscInt  bestrev = *revc;
+
+    PetscReal split;
+    PetscInt  revsplit;
+    PetscInt  C_a_split;
+    PetscInt  C_split_b;
+    while (ratio < opts.splittol() && iter < 10)
+    {
+        split = (L+R)/2.0;
+        revsplit = computeDev_exact(split, PETSC_TRUE);
+        C_a_split = reva - revsplit;
+        C_split_b = revsplit - revb;
+        if (C_a_split < C_split_b)
+            L = split;
+        else
+            R = split;
+        ratio = (std::max(C_a_split, C_split_b) > 0) 
+              ?  std::min(C_a_split, C_split_b) 
+              /  std::max(C_a_split, C_split_b)
+              :  0.0;
+        iter++;
+
+        if (ratio > bestratio)
+        {
+            bestsplit = split;
+            bestrev   = revsplit;
+            bestratio = ratio;
+        }
+    }
+
+    *c = bestsplit;
+    *revc = bestrev;
+    *Cl = reva - bestrev;
+    *Cr = bestrev - revb;
+}
+
 PetscInt eigen_mm::computeDev_exact(PetscReal a, PetscBool rl)
 {
     PetscInt N, retval;
@@ -916,6 +821,7 @@ PetscInt eigen_mm::computeDev_exact(PetscReal a, PetscBool rl)
 
     MatGetFactor(A, "mumps", MAT_FACTOR_CHOLESKY, &L);
     MatMumpsSetIcntl(L, 13, 1);
+    MatMumpsSetIcntl(L, 14, 120);
     MatCholeskyFactorSymbolic(L, A, 0, 0);
     MatCholeskyFactorNumeric(L, A, 0);
     MatMumpsGetInfog(L, 12, &retval);
