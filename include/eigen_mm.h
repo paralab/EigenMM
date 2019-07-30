@@ -37,9 +37,11 @@ private:
     bool _terse = false;
     bool _details = false;
     bool _debug = false;
+    bool _save_operators = false;
     bool _save_correctness = false;
     bool _save_eigenvalues = false;
     bool _save_eigenbasis = false;
+    char _operators_filename[2048];
     char _correctness_filename[2048];
     char _eigenvalues_filename[2048];
     char _eigenbasis_filename[2048];
@@ -68,6 +70,11 @@ public:
     void set_terse(bool v) { _terse = v; }
     void set_details(bool v) { _details = v; }
     void set_debug(bool v) { _debug = v; }
+    void set_save_operators(bool v, const char* filename)
+    {
+        _save_operators = v;
+        sprintf(_operators_filename, "%s", filename);
+    }
     void set_save_correctness(bool v, const char* filename)
     {
         _save_correctness = v;
@@ -106,9 +113,11 @@ public:
     bool terse() { return _terse; }
     bool details() { return _details; }
     bool debug() { return _debug; }
+    bool save_operators() { return _save_operators; }
     bool save_correctness() { return _save_correctness; }
     bool save_eigenvalues() { return _save_eigenvalues; }
     bool save_eigenbasis() { return _save_eigenbasis; }
+    char* operators_filename() { return _operators_filename; }
     char* correctness_filename() { return _correctness_filename; }
     char* eigenvalues_filename() { return _eigenvalues_filename; }
     char* eigenbasis_filename() { return _eigenbasis_filename; }
