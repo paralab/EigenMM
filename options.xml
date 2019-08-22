@@ -29,5 +29,6 @@
 	_eigenvalues_filename="" 
 	_eigenbasis_filename=""
 	_eps_solver_type="0"
-	_ksp_solver_type="0"/>
+	_ksp_solver_type="0"
+	_do_full_accuracy_test="0"/>
 </EIGEN_MM>

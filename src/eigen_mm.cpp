@@ -95,6 +95,9 @@ int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions &opts_in)
     MatCreateRedundantMatrix(K_in, node.nevaluators, node.comm, MAT_INITIAL_MATRIX, &K);
     MatCreateRedundantMatrix(M_in, node.nevaluators, node.comm, MAT_INITIAL_MATRIX, &M);
 
+    M_global = M_in;
+    K_global = K_in;
+
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
@@ -125,6 +128,9 @@ int eigen_mm::solve(Mat *V_out, Vec *lambda_out)
     
     if (opts.debug()) PetscPrintf(PETSC_COMM_WORLD, "forming eigenbasis\n");
     formEigenbasis(neval);
+
+    *V_out = V;
+    *lambda_out = lambda;
 
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
@@ -163,7 +169,7 @@ void eigen_mm::findUpperBound()
         PCFactorSetUpMatSolverPackage(pc);
         PCFactorGetMatrix(pc, &F);
         MatMumpsSetIcntl(F, 13, 1);
-        MatMumpsSetIcntl(F, 14, 80);
+        MatMumpsSetIcntl(F, 14, 140);
 
         PetscRandomCreate(node.comm, &r);
         PetscRandomSetType(r, PETSCRAND);
@@ -504,18 +510,22 @@ void eigen_mm::formEigenbasis(PetscInt neval)
     MPI_Barrier(PETSC_COMM_WORLD);
     double start_time = MPI_Wtime();
 
-    Vec v;
+    std::vector<Vec> v;
+    Vec Mv, v0;
     Vec t1, t2;
     PetscInt lm, lm0, N;
-    PetscReal lam, *v_data;
+    PetscReal nrm, lam, *v_data, dot1, dot2;
 
     MatGetSize(K, &N, NULL);
     MatCreateDense(PETSC_COMM_WORLD, PETSC_DECIDE, PETSC_DECIDE, N, neval, NULL, &V);
     MatSetUp(V);
     VecCreateMPI(PETSC_COMM_WORLD, PETSC_DECIDE, neval, &lambda);
 
-    VecCreateMPI(node.comm, PETSC_DECIDE, N, &v);
-    VecGetLocalSize(v, &lm);
+    VecCreateMPI(node.comm, PETSC_DECIDE, N, &v0);
+    v.push_back(v0);
+
+    VecCreateMPI(node.comm, PETSC_DECIDE, N, &Mv);
+    VecGetLocalSize(v[0], &lm);
     MPI_Exscan(&lm, &lm0, 1, MPIU_INT, MPI_SUM, node.comm);
     if (node.rank == 0) lm0 = 0;
 
@@ -524,26 +534,103 @@ void eigen_mm::formEigenbasis(PetscInt neval)
     for (int i = 0; i < lm; i++)
         idxm[i] = lm0 + i;
 
-
     VecCreateMPI(node.comm, PETSC_DECIDE, N, &t1);
     VecCreateMPI(node.comm, PETSC_DECIDE, N, &t2);
 
-    for (int i = 0; i < node.neval; i++)
+    int i = 0;
+    int k = 0;
+    EPSGetEigenpair(eps, i, &lam, NULL, v[0], NULL);
+    VecSetValue(lambda, node.neval0, lam, INSERT_VALUES);
+    while (i < node.neval)
     {
         idxn[0] = node.neval0 + i;
-        EPSGetEigenpair(eps, i, &lam, NULL, v, NULL);
-        VecGetArray(v, &v_data);
-        MatSetValues(V, lm, &idxm[0], 1, &idxn[0], v_data, INSERT_VALUES);
-        VecRestoreArray(v, &v_data);
-        VecSetValue(lambda, idxn[0], lam, INSERT_VALUES);
 
-        if (opts.save_correctness())
+        // Normalize v[0] with respect to M (v' * M * v = nrm)
+        MatMult(M, v[0], Mv);
+        VecDot(v[0], Mv, &nrm);
+        VecScale(v[0], 1.0/sqrt(nrm));
+
+        // Get vectors from EPS until v[k] is orthogonal to v[0] 
+        //  or there are no more vectors
+        k = 0;
+        nrm = 1.0;
+
+        while (i+k < node.neval-1 && nrm > 1e-5)
+        {
+            k++;
+            if (k >= v.size())
+            {
+                Vec vk;
+                VecCreateMPI(node.comm, PETSC_DECIDE, N, &vk);
+                v.push_back(vk);
+            }
+            EPSGetEigenpair(eps, i+k, &lam, NULL, v[k], NULL);
+            VecSetValue(lambda, idxn[0]+k, lam, INSERT_VALUES);
+            VecDot(v[k], Mv, &nrm);
+        }
+
+        // (MGS) Orthogonalize v[0] through v[k-1] with respect to M
+        if (k > 0)
+        {
+            // v[0] is normalized
+            for (int j = 1; j < k; j++)
+            {
+                for (int jj = 0; jj < j; jj++)
+                {
+                    // Mv = M*v[jj]
+                    MatMult(M, v[jj], Mv);
+
+                    // dot1 = dot(v[j], Mv)
+                    VecDot(v[j], Mv, &dot1);
+
+                    // dot2 = dot(v[jj], Mv)
+                    VecDot(v[jj], Mv, &dot2);
+
+                    // v[j] -= dot1/dot2 * v[jj]
+                    VecAXPY(v[j], -dot1/dot2, v[jj]);
+                }
+
+                // normalize v[j]
+                MatMult(M, v[j], Mv);
+                VecDot(v[j], Mv, &nrm);
+                VecScale(v[j], 1.0/sqrt(nrm));
+            }
+        }
+
+        if (k > 0)
+        {
+            // Insert vectors v[0] through v[k-1] into V
+            for (int j = 0; j < k; j++)
+            {
+                VecGetArray(v[j], &v_data);
+                MatSetValues(V, lm, &idxm[0], 1, &idxn[0]+j, v_data, INSERT_VALUES);
+                VecRestoreArray(v[j], &v_data);
+            }
+
+            // Copy v[k] into v[0]
+            VecCopy(v[k], v[0]);
+
+            // Increment i
+            i += k;
+        }
+        else
+        {
+            VecGetArray(v[0], &v_data);
+            MatSetValues(V, lm, &idxm[0], 1, &idxn[0], v_data, INSERT_VALUES);
+            VecRestoreArray(v[0], &v_data);
+            i++;
+        }
+    }
+
+    if (opts.save_correctness())
+    {
+        for (int j = 0; j < node.neval; j++)
         {
             PetscReal residual;
 
             // K * vk - lambdak * M * vk
-            MatMult(K, v, t1);
-            MatMult(M, v, t2);
+            MatMult(K, v[0], t1);
+            MatMult(M, v[0], t2);
             VecAXPY(t1, -lam, t2);
             VecNorm(t1, NORM_2, &residual);
 
@@ -588,10 +675,41 @@ void eigen_mm::formEigenbasis(PetscInt neval)
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
 
-    VecDestroy(&v);
+    //VecDestroy(&v);
+    VecDestroy(&Mv);
     VecDestroy(&t1);
     VecDestroy(&t2);
     EPSDestroy(&eps);
+
+    // // Temporary orthogonality check
+    // // =============================================================
+    // PetscPrintf(PETSC_COMM_WORLD, "Beginning correctness check\n");
+
+    // // Want to verify that the following conditions are satisfied
+    // // V'*M*V = I        [ norm(V'*M*V - I) ]
+    // Mat temp1, temp2;
+    // MatMatMult(M_global, V, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp1);
+    // MatTransposeMatMult(V, temp1, MAT_INITIAL_MATRIX, PETSC_DEFAULT, &temp2);
+    // MatShift(temp2, -1.0);
+    // MatNorm(temp2, NORM_FROBENIUS, &nrm);
+    // PetscPrintf(PETSC_COMM_WORLD, "norm(V'*M*V - I) = %.16lf\n", nrm);
+
+    // // V'*K*V = lambda   [ norm(V'*K*V - lambda) / norm(lambda) ]
+    // MatMatMult(K_global, V, MAT_REUSE_MATRIX, PETSC_DEFAULT, &temp1);
+    // MatTransposeMatMult(V, temp1, MAT_REUSE_MATRIX, PETSC_DEFAULT, &temp2);
+    // VecNorm(lambda, NORM_2, &lam);
+    // VecScale(lambda, -1.0);
+    // MatDiagonalSet(temp2, lambda, ADD_VALUES);
+    // VecScale(lambda, -1.0);
+    // MatNorm(temp2, NORM_FROBENIUS, &nrm);
+    // PetscPrintf(PETSC_COMM_WORLD, "norm(V'*K*V - lambda) / norm(lambda) = %.16lf\n", nrm/lam);
+
+    // MatDestroy(&temp1);
+    // MatDestroy(&temp2);
+    // // =============================================================
+
+    for (int j = 0; j < v.size(); j++)
+        VecDestroy(&v[j]);
 
     if (opts.terse() && opts.debug())
         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf\n", elapsed, start_time, end_time);
@@ -619,7 +737,7 @@ PetscInt eigen_mm::solveSubProblem(PetscReal *intervals, int job)
         PetscOptionsInsertString(nullptr, "-st_pc_type cholesky");
         PetscOptionsInsertString(nullptr, "-st_pc_factor_mat_solver_package mumps");
         PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_13 1");
-        PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_14 120");
+        PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_14 140");
     }
     else if (opts.ksp_solver_type() == 1)
     {
@@ -821,7 +939,7 @@ PetscInt eigen_mm::computeDev_exact(PetscReal a, PetscBool rl)
 
     MatGetFactor(A, "mumps", MAT_FACTOR_CHOLESKY, &L);
     MatMumpsSetIcntl(L, 13, 1);
-    MatMumpsSetIcntl(L, 14, 120);
+    MatMumpsSetIcntl(L, 14, 140);
     MatCholeskyFactorSymbolic(L, A, 0, 0);
     MatCholeskyFactorNumeric(L, A, 0);
     MatMumpsGetInfog(L, 12, &retval);
@@ -974,3 +1092,132 @@ void eigen_mm::countInterval(PetscReal a, PetscReal b,
     MPI_Barrier(node.comm);
 }
 // ===================================================
+
+
+void eigen_mm::exactEigenvalues_square_neumann(int Ne, 
+    std::vector<PetscReal> &lambda, 
+    std::vector<PetscReal> &eta1, 
+    std::vector<PetscReal> &eta2)
+{
+    int rank, size;
+    MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
+    MPI_Comm_size(PETSC_COMM_WORLD, &size);
+
+    int count = 0;
+    int d = ceil(sqrt(Ne));
+    lambda.resize(Ne);
+    eta1.resize(Ne);
+    eta2.resize(Ne);
+
+    if (rank == 0)
+    {
+        // Generate set of eigenvalues
+        std::vector<std::pair<PetscReal,int>> lambda_local;
+        std::vector<PetscReal> eta1_local;
+        std::vector<PetscReal> eta2_local;
+        PetscReal L, E1, E2;
+        for (int i = 0; i < d+1; i++)
+        {
+            E1 = (i*PI) * (i*PI);
+            for (int j = 0; j < d+1; j++)
+            {
+                E2 = (j*PI) * (j*PI);
+                L = E1 + E2;
+
+                if (L > 0.0)
+                {
+                    std::pair<PetscReal,int> p(L,count);
+                    lambda_local.push_back(p);
+                    eta1_local.push_back(E1);
+                    eta2_local.push_back(E2);
+                    count++;
+                }
+            }
+        }
+
+        // Sort lambda from smallest to largest
+        std::sort(lambda_local.begin(), lambda_local.end());
+        
+        // Output first Ne smallest eigenvalues
+        for (int i = 0; i < Ne; i++)
+        {
+            lambda[i] = lambda_local[i].first;
+            eta1[i] = eta1_local[lambda_local[i].second];
+            eta2[i] = eta2_local[lambda_local[i].second];
+        }
+    }
+
+    // Broadcast results to all processes
+    MPI_Bcast(&lambda[0], Ne, MPIU_REAL, 0, PETSC_COMM_WORLD);
+    MPI_Bcast(&eta1[0], Ne, MPIU_REAL, 0, PETSC_COMM_WORLD);
+    MPI_Bcast(&eta2[0], Ne, MPIU_REAL, 0, PETSC_COMM_WORLD);
+}
+void eigen_mm::exactEigenvalues_cube_neumann(int Ne, 
+    std::vector<PetscReal> &lambda, 
+    std::vector<PetscReal> &eta1, 
+    std::vector<PetscReal> &eta2,
+    std::vector<PetscReal> &eta3)
+{
+    int rank, size;
+    MPI_Comm_rank(PETSC_COMM_WORLD, &rank);
+    MPI_Comm_size(PETSC_COMM_WORLD, &size);
+
+    int count = 0;
+    int d = ceil(pow(Ne,1.0/3.0));
+    lambda.resize(Ne);
+    eta1.resize(Ne);
+    eta2.resize(Ne);
+    eta3.resize(Ne);
+
+    if (rank == 0)
+    {
+        // Generate set of eigenvalues
+        std::vector<std::pair<PetscReal,int>> lambda_local;
+        std::vector<PetscReal> eta1_local;
+        std::vector<PetscReal> eta2_local;
+        std::vector<PetscReal> eta3_local;
+        PetscReal L, E1, E2, E3;
+        for (int i = 0; i < d+1; i++)
+        {
+            E1 = (i*PI) * (i*PI);
+            for (int j = 0; j < d+1; j++)
+            {
+                E2 = (j*PI) * (j*PI);
+                for (int k = 0; k < d+1; k++)
+                {
+                    E3 = (k*PI) * (k*PI);
+                    L = E1 + E2 + E3;
+
+                    if (L > 0.0)
+                    {
+                        std::pair<PetscReal,int> p(L,count);
+                        lambda_local.push_back(p);
+                        eta1_local.push_back(E1);
+                        eta2_local.push_back(E2);
+                        eta3_local.push_back(E3);
+                        count++;
+                    }
+                }
+                
+            }
+        }
+
+        // Sort lambda from smallest to largest
+        std::sort(lambda_local.begin(), lambda_local.end());
+        
+        // Output first Ne smallest eigenvalues
+        for (int i = 0; i < Ne; i++)
+        {
+            lambda[i] = lambda_local[i].first;
+            eta1[i] = eta1_local[lambda_local[i].second];
+            eta2[i] = eta2_local[lambda_local[i].second];
+            eta3[i] = eta3_local[lambda_local[i].second];
+        }
+    }
+
+    // Broadcast results to all processes
+    MPI_Bcast(&lambda[0], Ne, MPIU_REAL, 0, PETSC_COMM_WORLD);
+    MPI_Bcast(&eta1[0], Ne, MPIU_REAL, 0, PETSC_COMM_WORLD);
+    MPI_Bcast(&eta2[0], Ne, MPIU_REAL, 0, PETSC_COMM_WORLD);
+    MPI_Bcast(&eta3[0], Ne, MPIU_REAL, 0, PETSC_COMM_WORLD);
+}

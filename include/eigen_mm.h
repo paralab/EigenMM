@@ -4,6 +4,7 @@
 #include <petsc.h>
 #include <slepceps.h>
 
+#include <algorithm>
 #include <vector>
 #include <map>
 #include <string>
@@ -166,6 +167,16 @@ public:
 
     int init(Mat &K_in, Mat &M_in, SolverOptions &opt);
     int solve(Mat *V_out, Vec *lambda_out);
+
+    void exactEigenvalues_square_neumann(int Ne, 
+        std::vector<PetscReal> &lambda, 
+        std::vector<PetscReal> &eta1, 
+        std::vector<PetscReal> &eta2);
+    void exactEigenvalues_cube_neumann(int Ne, 
+        std::vector<PetscReal> &lambda, 
+        std::vector<PetscReal> &eta1, 
+        std::vector<PetscReal> &eta2,
+        std::vector<PetscReal> &eta3);
 
     void findUpperBound();
     void rescaleInterval();
