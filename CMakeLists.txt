@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.04)
 #project(EigenMM)
 
-#set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 11)
 
 # Set up RPATH
 SET(CMAKE_SKIP_BUILD_RPATH  FALSE)
