@@ -294,13 +294,17 @@ void eigen_mm::formSubproblems()
 
     PetscInt n = node.nevaluators;
 
-    PetscInt Nbar, Nhat;
+    PetscInt Nbar;
+    PetscReal Nhat;
     PetscReal err;
-    std::vector<PetscInt> rev(n+1);
-    std::vector<PetscInt> C(n);
     std::vector<PetscReal> x(n+1);
+    std::vector<PetscReal> y(n+1);
+    std::vector<PetscInt> RA(n+1);
+    std::vector<PetscInt> A(n);
+    std::vector<PetscInt> RB(n+1);
+    std::vector<PetscInt> B(n);
 
-    PetscReal bestCerr = N;
+    PetscReal bestCerr;
     std::vector<PetscInt> bestRev(n+1);
     std::vector<PetscInt> bestC(n);
     std::vector<PetscReal> bestX(n+1);
@@ -310,134 +314,117 @@ void eigen_mm::formSubproblems()
         // (root node) Initialize parameters and x, broadcast to all processes
         if (node.id == 0)
         {
-            rev[0] = N;
-            rev[n] = (opts.nevals() > 0) ? (N - opts.nevals()) : 0;
-            Nbar = rev[0] - rev[n];
-            Nhat = Nbar / n;
-
             x[0] = opts.L();
             x[n] = opts.R();
             PetscReal step = (x[n] - x[0])/ (PetscReal) n;
             for (int i = 1; i < n; i++)
                 x[i] = x[0] + i*step;
+
+            RA[0] = N;
+            RB[0] = RA[0];
+            RA[n] = computeDev_exact(x[n], PETSC_TRUE);
+            RB[n] = RA[n];
+            Nbar = RA[0] - RA[n];
+            Nhat = (PetscReal) Nbar / (PetscReal) n;
         }
         MPI_Bcast(&Nbar,   1,   MPIU_INT,  0, PETSC_COMM_WORLD);
-        MPI_Bcast(&Nhat,   1,   MPIU_INT,  0, PETSC_COMM_WORLD);
-        MPI_Bcast(&rev[0], 1,   MPIU_INT,  0, PETSC_COMM_WORLD);
-        MPI_Bcast(&rev[n], 1,   MPIU_INT,  0, PETSC_COMM_WORLD);
+        MPI_Bcast(&Nhat,   1,   MPIU_REAL, 0, PETSC_COMM_WORLD);
+        MPI_Bcast(&RA[0],  1,   MPIU_INT,  0, PETSC_COMM_WORLD);
+        MPI_Bcast(&RA[n],  1,   MPIU_INT,  0, PETSC_COMM_WORLD);
+        MPI_Bcast(&RB[0],  1,   MPIU_INT,  0, PETSC_COMM_WORLD);
+        MPI_Bcast(&RB[n],  1,   MPIU_INT,  0, PETSC_COMM_WORLD);
         MPI_Bcast(&x[0],   n+1, MPIU_REAL, 0, PETSC_COMM_WORLD);
+
+
+        // Count initial subintervals
+        err = count_subintervals(n, Nhat, Nbar, x, RA, A);
+        bestX = x;
+        bestC = A;
+        bestCerr = err;
 
         // stage 1: global refinement
         for (int k = 0; k < opts.nk(); k++)
         {
-            if (node.id > 0) rev[node.id] = computeDev_exact(x[node.id], PETSC_TRUE);
-            
-            for (int i = 1; i < n; i++)
-                MPI_Bcast(&rev[i], 1, MPIU_INT, i*node.size, PETSC_COMM_WORLD);
-
-            if (node.id == 0)
-            {
-                err = 0.0;
-                for (int i = 0; i < n; i++)
-                {
-                    C[i] = rev[i] - rev[i+1];
-                    err = std::max((PetscReal) abs(C[i] - Nhat), err);
-                }
-                err = err / (PetscReal) Nbar;
-            }
-            MPI_Bcast(&err,      1, MPIU_REAL, 0, PETSC_COMM_WORLD);
-            MPI_Bcast(&rev[0], n+1, MPIU_INT,  0, PETSC_COMM_WORLD);
-            MPI_Bcast(&C[0],     n, MPIU_INT,  0, PETSC_COMM_WORLD);
-
-            // update bests
+            // global refinement step
+            if (node.worldrank == 0) global_refine(n, x, y, A, Nhat);
+            MPI_Bcast(&y[0], n+1, MPIU_REAL, 0, PETSC_COMM_WORLD); 
+            err = count_subintervals(n, Nhat, Nbar, y, RB, B);
             if (err < bestCerr)
             {
-                bestX = x;
-                bestRev = rev;
-                bestC = C;
+                bestX = y;
+                bestC = B;
                 bestCerr = err;
             }
 
-            if (k < opts.nk()-1)
-            {
-                // global refinement step
-                if (node.worldrank == 0) global_refine(n, x, C, Nhat);
-                MPI_Bcast(&x[0],   n+1, MPIU_REAL, 0, PETSC_COMM_WORLD);
-            }
-            else
-            {
-                // set data equal to the best observed
-                x = bestX;
-                rev = bestRev;
-                C = bestC;
-                err = bestCerr;
-            }
-            
+            // Merge A and B approximations to get C, update x, RA, A
+            merge_approximations(Nhat, Nbar, x, RA, y, RB, A);
         }
 
-        // stage 2: local refinement
-        for (int b = 0; b < opts.nb(); b++)
-        {
-            // even pass
-            if (node.id % 2 == 0 && node.id < n-1)
-            {
-                // determine if interval pair can be balanced
-                PetscReal ratio = (std::max(C[node.id], C[node.id+1]) != 0) 
-                                ?  std::min(C[node.id], C[node.id+1]) 
-                                /  std::max(C[node.id], C[node.id+1]) 
-                                :  0.0;
-                bool cond1 = C[node.id] > Nhat && C[node.id+1] < Nhat;
-                bool cond2 = C[node.id] < Nhat && C[node.id+1] > Nhat;
-                bool cond  = cond1 || cond2;
+        x = bestX;
+
+        // // stage 2: local refinement
+        // for (int b = 0; b < opts.nb(); b++)
+        // {
+        //     // even pass
+        //     if (node.id % 2 == 0 && node.id < n-1)
+        //     {
+        //         // determine if interval pair can be balanced
+        //         PetscReal ratio = (std::max(C[node.id], C[node.id+1]) != 0) 
+        //                         ?  std::min(C[node.id], C[node.id+1]) 
+        //                         /  std::max(C[node.id], C[node.id+1]) 
+        //                         :  0.0;
+        //         bool cond1 = C[node.id] > Nhat && C[node.id+1] < Nhat;
+        //         bool cond2 = C[node.id] < Nhat && C[node.id+1] > Nhat;
+        //         bool cond  = cond1 || cond2;
 
 
-                // if valid, balance interval pair
-                if (ratio < opts.splittol() && cond)
-                {
-                    balance_intervals(  x[node.id],   x[node.id+2],   &x[node.id+1], 
-                                      rev[node.id], rev[node.id+2], &rev[node.id+1],
-                                       &C[node.id],  &C[node.id+1]);
-                }
-            }
-            MPI_Barrier(PETSC_COMM_WORLD);
-            for (int i = 0; i < n; i+=2)
-            {
-                MPI_Bcast(&x[i+1],   1, MPIU_REAL, i*node.size, PETSC_COMM_WORLD);
-                MPI_Bcast(&rev[i+1], 1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
-                MPI_Bcast(&C[i],     1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
-                MPI_Bcast(&C[i+1],   1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
-            }
+        //         // if valid, balance interval pair
+        //         if (ratio < opts.splittol() && cond)
+        //         {
+        //             balance_intervals(  x[node.id],   x[node.id+2],   &x[node.id+1], 
+        //                               rev[node.id], rev[node.id+2], &rev[node.id+1],
+        //                                &C[node.id],  &C[node.id+1]);
+        //         }
+        //     }
+        //     MPI_Barrier(PETSC_COMM_WORLD);
+        //     for (int i = 0; i < n; i+=2)
+        //     {
+        //         MPI_Bcast(&x[i+1],   1, MPIU_REAL, i*node.size, PETSC_COMM_WORLD);
+        //         MPI_Bcast(&rev[i+1], 1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
+        //         MPI_Bcast(&C[i],     1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
+        //         MPI_Bcast(&C[i+1],   1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
+        //     }
 
-            // odd pass
-            if (node.id % 2 == 1 && node.id < n-1)
-            {
-                // determine if interval pair can be balanced
-                PetscReal ratio = (std::max(C[node.id], C[node.id+1]) != 0) 
-                                ?  std::min(C[node.id], C[node.id+1]) 
-                                /  std::max(C[node.id], C[node.id+1]) 
-                                :  0.0;
-                bool cond1 = C[node.id] > Nhat && C[node.id+1] < Nhat;
-                bool cond2 = C[node.id] < Nhat && C[node.id+1] > Nhat;
-                bool cond  = cond1 || cond2;
+        //     // odd pass
+        //     if (node.id % 2 == 1 && node.id < n-1)
+        //     {
+        //         // determine if interval pair can be balanced
+        //         PetscReal ratio = (std::max(C[node.id], C[node.id+1]) != 0) 
+        //                         ?  std::min(C[node.id], C[node.id+1]) 
+        //                         /  std::max(C[node.id], C[node.id+1]) 
+        //                         :  0.0;
+        //         bool cond1 = C[node.id] > Nhat && C[node.id+1] < Nhat;
+        //         bool cond2 = C[node.id] < Nhat && C[node.id+1] > Nhat;
+        //         bool cond  = cond1 || cond2;
 
 
-                // if valid, balance interval pair
-                if (ratio < opts.splittol() && cond)
-                {
-                    balance_intervals(  x[node.id],   x[node.id+2],   &x[node.id+1], 
-                                      rev[node.id], rev[node.id+2], &rev[node.id+1],
-                                       &C[node.id],  &C[node.id+1]);
-                }
-            }
-            MPI_Barrier(PETSC_COMM_WORLD);
-            for (int i = 1; i < n; i+=2)
-            {
-                MPI_Bcast(&x[i+1],   1, MPIU_REAL, i*node.size, PETSC_COMM_WORLD);
-                MPI_Bcast(&rev[i+1], 1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
-                MPI_Bcast(&C[i],     1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
-                MPI_Bcast(&C[i+1],   1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
-            }
-        }
+        //         // if valid, balance interval pair
+        //         if (ratio < opts.splittol() && cond)
+        //         {
+        //             balance_intervals(  x[node.id],   x[node.id+2],   &x[node.id+1], 
+        //                               rev[node.id], rev[node.id+2], &rev[node.id+1],
+        //                                &C[node.id],  &C[node.id+1]);
+        //         }
+        //     }
+        //     MPI_Barrier(PETSC_COMM_WORLD);
+        //     for (int i = 1; i < n; i+=2)
+        //     {
+        //         MPI_Bcast(&x[i+1],   1, MPIU_REAL, i*node.size, PETSC_COMM_WORLD);
+        //         MPI_Bcast(&rev[i+1], 1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
+        //         MPI_Bcast(&C[i],     1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
+        //         MPI_Bcast(&C[i+1],   1, MPIU_INT,  i*node.size, PETSC_COMM_WORLD);
+        //     }
+        // }
         
         for (int i = 0; i < n; i++)
         {
@@ -461,6 +448,109 @@ void eigen_mm::formSubproblems()
         PetscPrintf(PETSC_COMM_WORLD, "%lf %lf %lf %d\n", elapsed, start_time, end_time, (int) n);
     else if (opts.debug())
         PetscPrintf(PETSC_COMM_WORLD, "(formSubproblems) Elapsed: %lf, Total Subproblems: %d\n", elapsed, (int) n);
+}
+PetscReal eigen_mm::count_subintervals(PetscInt n, PetscReal Nhat, PetscInt Nbar,
+    std::vector<PetscReal> x, std::vector<PetscInt> &RA, std::vector<PetscInt> &A)
+{
+    PetscReal err;
+    if (node.id > 0) RA[node.id] = computeDev_exact(x[node.id], PETSC_TRUE);
+    else RA[n] = computeDev_exact(x[n], PETSC_TRUE);
+    for (int i = 1; i < n; i++)
+        MPI_Bcast(&RA[i], 1, MPIU_INT, i*node.size, PETSC_COMM_WORLD);
+    if (node.worldrank == 0)
+    {
+        err = 0.0;
+        for (int i = 0; i < n; i++)
+        {
+            A[i] = RA[i] - RA[i+1];
+            err += ((PetscReal) A[i] - Nhat)*((PetscReal) A[i] - Nhat);
+        }
+        err = sqrt(err);
+    }
+    MPI_Bcast(&err,      1, MPIU_REAL, 0, PETSC_COMM_WORLD);
+    MPI_Bcast(&RA[0],  n+1, MPIU_INT,  0, PETSC_COMM_WORLD);
+    MPI_Bcast(&A[0],     n, MPIU_INT,  0, PETSC_COMM_WORLD);
+    return err;
+}
+void eigen_mm::merge_approximations(PetscReal Nhat, PetscInt Nbar,
+    std::vector<PetscReal> &x, std::vector<PetscInt> &RA,
+    std::vector<PetscReal> y, std::vector<PetscInt> RB,
+    std::vector<PetscInt> &A)
+{
+    // root node merges (x,RA) and (y,RB) to get new (x,RA)
+    if (node.worldrank == 0)
+    {
+        std::vector<PetscReal> z;
+        std::vector<PetscInt> RC;
+
+        int n1 = x.size();
+        int n2 = y.size();
+        int i = 0;
+        int j = 0;
+        int k = 0;
+        PetscReal lastz = 0.0;
+
+        while (i < n1 && j < n2)
+        {
+            if (x[i] < y[j])
+            {
+                if(fabs(x[i] - lastz) > 1e-8)
+                {
+                    z.push_back(x[i]);
+                    RC.push_back(RA[i]);
+                    lastz = x[i];
+                }
+                i++;
+            }
+            else
+            {
+                if (fabs(y[j] - lastz) > 1e-8)
+                {
+                    z.push_back(y[j]);
+                    RC.push_back(RB[j]);
+                    lastz = y[j];
+                }
+                j++;
+            }
+        }
+        while (i < n1)
+        {
+            if(fabs(x[i] - lastz) > 1e-8)
+            {
+                z.push_back(x[i]);
+                RC.push_back(RA[i]);
+                lastz = x[i];
+            }
+            i++;
+        }
+        while (j < n2)
+        {
+            if (fabs(y[j] - lastz) > 1e-8)
+            {
+                z.push_back(y[j]);
+                RC.push_back(RB[j]);
+                lastz = y[j];
+            }
+            j++;
+        }
+
+        x = z;
+        RA = RC;
+    }
+
+    // communicate (x,RA) to all processes
+    PetscInt ln;
+    if (node.worldrank == 0) ln = x.size();
+    MPI_Bcast(&ln, 1, MPIU_INT, 0, PETSC_COMM_WORLD);
+    if (node.worldrank != 0) x.resize(ln);
+    if (node.worldrank != 0) RA.resize(ln);
+    MPI_Bcast(&x[0],  ln, MPIU_REAL, 0, PETSC_COMM_WORLD);
+    MPI_Bcast(&RA[0], ln, MPIU_INT,  0, PETSC_COMM_WORLD);
+
+    // count (x,RA) to get A
+    A.resize(ln-1);
+    for (int i = 0; i < ln-1; i++)
+        A[i] = RA[i] - RA[i+1];
 }
 PetscInt eigen_mm::solveSubproblems()
 {
@@ -814,13 +904,16 @@ void eigen_mm::splitSubProblem(PetscReal a, PetscReal b,
 }
 
 void eigen_mm::global_refine(PetscInt n,
-                             std::vector<PetscReal> &x, 
+                             std::vector<PetscReal>  x,
+                             std::vector<PetscReal> &y, 
                              std::vector<PetscInt>   C, 
-                             PetscInt Nhat)
+                             PetscReal Nhat)
 {
+    int ln = x.size();
+
     std::vector<PetscReal> x2(n+1);
     x2[0] = x[0];
-    x2[n] = x[n];
+    x2[n] = x[ln-1];
 
     PetscReal xi, xj, xjm1, xp, a;
     PetscInt tempcount, prevcount, count;
@@ -829,7 +922,7 @@ void eigen_mm::global_refine(PetscInt n,
     xi = x[0];
     for (int i = 0; i < n-1; i++)
     {
-        while (j <= n && x[j] <= xi) { j++; }
+        while (j < ln-1 && x[j] <= xi) { j++; }
         xj   = x[j];
         xjm1 = x[j-1];
 
@@ -864,7 +957,7 @@ void eigen_mm::global_refine(PetscInt n,
         xi      = xp;
     }
 
-    x = x2;
+    y = x2;
 }
 void eigen_mm::balance_intervals(PetscReal   a, PetscReal   b, PetscReal   *c, 
                                  PetscInt reva, PetscInt revb, PetscInt *revc,

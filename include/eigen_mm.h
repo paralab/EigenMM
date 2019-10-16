@@ -181,6 +181,12 @@ public:
     void findUpperBound();
     void rescaleInterval();
     void formSubproblems();
+    PetscReal count_subintervals(PetscInt n, PetscReal Nhat, PetscInt Nbar,
+        std::vector<PetscReal> x, std::vector<PetscInt> &RA, std::vector<PetscInt> &A);
+    void merge_approximations(PetscReal Nhat, PetscInt Nbar,
+        std::vector<PetscReal> &x, std::vector<PetscInt> &RA,
+        std::vector<PetscReal> y, std::vector<PetscInt> RB,
+        std::vector<PetscInt> &A);
     PetscInt solveSubproblems();
     void formEigenbasis(PetscInt neval);
 
@@ -188,9 +194,10 @@ public:
     void splitSubProblem(PetscReal a, PetscReal b, PetscReal *c, 
         PetscInt *out_ec_left, PetscInt *out_ec_right);
     void global_refine(PetscInt n,
-                       std::vector<PetscReal> &x, 
+                       std::vector<PetscReal>  x, 
+                       std::vector<PetscReal> &y,
                        std::vector<PetscInt>   C, 
-                       PetscInt Nhat);
+                       PetscReal Nhat);
     void balance_intervals(PetscReal   a, PetscReal   b, PetscReal   *c, 
                            PetscInt reva, PetscInt revb, PetscInt *revc,
                            PetscInt  *Cl, PetscInt  *Cr);
