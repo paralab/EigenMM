@@ -1,23 +1,5 @@
 #include "eigen_mm.h"
 
-// ===============================================
-// Source: https://en.wikipedia.org/wiki/Adler-32
-const int MOD_ADLER = 65521;
-uint32_t adler32(unsigned char *data, size_t len)
-{
-    uint32_t a = 1, b = 0;
-    size_t index;
-
-    for (index = 0; index < len; ++index)
-    {
-        a = (a + data[index]) % MOD_ADLER;
-        b = (b + a) % MOD_ADLER;
-    }
-    
-    return (b << 16) | a;
-}
-// ===============================================
-
 eigen_mm::eigen_mm() = default;
 
 eigen_mm::~eigen_mm(){
@@ -44,50 +26,15 @@ int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions &opts_in)
     std::vector<uint32_t> evaluator_ids;
     std::map<uint32_t, uint32_t> processor_to_evaluator;
 
-    MPI_Get_processor_name(processor_name, &resultlen);
-    processor_id = adler32((unsigned char *) &processor_name[0], resultlen*sizeof(char));
-    if (node.worldrank == 0) processor_ids.resize(node.worldsize);
-    if (node.worldrank == 0) evaluator_ids.resize(node.worldsize);
-    MPI_Gather(&processor_id, 1, MPI_UINT32_T, &processor_ids[0], 1, MPI_UINT32_T, 0, PETSC_COMM_WORLD);
-    if (node.worldrank == 0)
-    {
-        for (int i = 0; i < node.worldsize; i++)
-        {
-            uint32_t key = processor_ids[i];
-            if (processor_to_evaluator.count(key) == 0)
-            {
-                processor_to_evaluator[key] = count / opts.nodesperevaluator();
-                count++;
-            }
-        }
-        for (int i = 0; i < node.worldsize; i++)
-        {
-            evaluator_ids[i] = processor_to_evaluator[processor_ids[i]];
-        }
-    }
-    MPI_Scatter(&evaluator_ids[0], 1, MPI_UINT32_T, &evaluator_id, 1, MPI_UINT32_T, 0, PETSC_COMM_WORLD);
-    if (node.worldrank == 0) count = processor_to_evaluator.size();
-    MPI_Bcast(&count, 1, MPI_INT, 0, PETSC_COMM_WORLD);
-
-    // multiply evaluator_id by the number of subproblems per evaluator
-    // determine number of processors per subproblem
-    // n_id = sppe * e_id + floor(e_rank / sppn)
-
-    MPI_Comm nodecomm;
-    int nodecomm_size, nodecomm_rank;
-    MPI_Comm_split(PETSC_COMM_WORLD, evaluator_id, node.worldrank, &nodecomm);
-    MPI_Comm_size(nodecomm, &nodecomm_size);
-    MPI_Comm_rank(nodecomm, &nodecomm_rank);
-
-    int sppn = nodecomm_size / opts.subproblemsperevaluator();
-    evaluator_id = evaluator_id * opts.subproblemsperevaluator() + nodecomm_rank / sppn;
+    int sppn = opts.taskspernode() / opts.subproblemsperevaluator();
+    evaluator_id = (node.worldrank / opts.taskspernode()) * opts.subproblemsperevaluator() + (node.worldrank % opts.taskspernode()) / sppn;
 
     MPI_Comm_split(PETSC_COMM_WORLD, evaluator_id, node.worldrank, &(node.comm));
     MPI_Comm_size(node.comm, &(node.size));
     MPI_Comm_rank(node.comm, &(node.rank));
     node.id = evaluator_id;
 
-    node.nevaluators = opts.subproblemsperevaluator() * count / opts.nodesperevaluator();
+    node.nevaluators = (node.worldsize / opts.taskspernode()) * opts.subproblemsperevaluator();
     opts.set_nevaluators(node.nevaluators);
     opts.set_totalsubproblems(opts.nevaluators());
     node.neval = 0;
@@ -820,20 +767,12 @@ PetscInt eigen_mm::solveSubProblem(PetscReal *intervals, int job)
     // Set up solver
     PetscInt nconv;
 
-    if (opts.ksp_solver_type() == 0)
-    {
-        PetscOptionsInsertString(nullptr, "-st_type sinvert");
-        PetscOptionsInsertString(nullptr, "-st_ksp_type preonly");
-        PetscOptionsInsertString(nullptr, "-st_pc_type cholesky");
-        PetscOptionsInsertString(nullptr, "-st_pc_factor_mat_solver_package mumps");
-        PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_13 1");
-        PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_14 140");
-    }
-    else if (opts.ksp_solver_type() == 1)
-    {
-        PetscOptionsInsertString(nullptr, "-st_type sinvert");
-        PetscOptionsInsertString(nullptr, "-st_ksp_type chebyshev");
-    }
+    PetscOptionsInsertString(nullptr, "-st_type sinvert");
+    PetscOptionsInsertString(nullptr, "-st_ksp_type preonly");
+    PetscOptionsInsertString(nullptr, "-st_pc_type cholesky");
+    PetscOptionsInsertString(nullptr, "-st_pc_factor_mat_solver_package mumps");
+    PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_13 1");
+    PetscOptionsInsertString(nullptr, "-mat_mumps_icntl_14 140");
 
     EPSCreate(node.comm,&eps);
 
@@ -841,13 +780,10 @@ PetscInt eigen_mm::solveSubProblem(PetscReal *intervals, int job)
     EPSSetProblemType(eps,EPS_GHEP);
     EPSSetFromOptions(eps);
 
-    if (opts.eps_solver_type() == 0) 
-    {
-        EPSSetWhichEigenpairs(eps, EPS_ALL);
-        EPSSetInterval(eps, intervals[0], intervals[1]);
-        EPSKrylovSchurSetPartitions(eps, 1);
-        EPSKrylovSchurSetSubintervals(eps, intervals);
-    }
+    EPSSetWhichEigenpairs(eps, EPS_ALL);
+    EPSSetInterval(eps, intervals[0], intervals[1]);
+    EPSKrylovSchurSetPartitions(eps, 1);
+    EPSKrylovSchurSetSubintervals(eps, intervals);
 
     EPSSolve(eps);
 
@@ -1185,7 +1121,6 @@ void eigen_mm::countInterval(PetscReal a, PetscReal b,
     MPI_Barrier(node.comm);
 }
 // ===================================================
-
 
 void eigen_mm::exactEigenvalues_square_neumann(int Ne, 
     std::vector<PetscReal> &lambda, 

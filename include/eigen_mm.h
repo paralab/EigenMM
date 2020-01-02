@@ -19,22 +19,27 @@
 class SolverOptions
 {
 private:
-    PetscInt _nevt = 100;
-    PetscInt _splitmaxiters = 10;
+    // communicator options
     PetscInt _nodesperevaluator = 1;
     PetscInt _subproblemsperevaluator = 1;
     PetscInt _totalsubproblems = 1;
     PetscInt _nevaluators = 1;
     PetscInt _nevals = -1;
-    PetscInt _nk = 5;
-    PetscInt _nb = 3;
-    PetscInt _p = 30;
+    PetscInt _taskspernode = 28;
+
+    // eigenvalue partitioning options
+    PetscInt _nk = 7;
+    PetscInt _nb = 4;
+    PetscInt _p = 0;
     PetscInt _nv = 10;
+    PetscInt _splitmaxiters = 10;
     PetscInt _raditers = 10;
     PetscReal _splittol = 0.9;
     PetscReal _radtol = 1e-3;
     PetscReal _L = 0.01;
     PetscReal _R = -1.0;
+
+    // save and print options
     bool _terse = false;
     bool _details = false;
     bool _debug = false;
@@ -46,28 +51,31 @@ private:
     char _correctness_filename[2048];
     char _eigenvalues_filename[2048];
     char _eigenbasis_filename[2048];
-    PetscInt _eps_solver_type = 0;
-    PetscInt _ksp_solver_type = 0;
 
 public:
     SolverOptions() {}
 
-    // setters
-    void set_nevt(PetscInt v) { _nevt = v; }
-    void set_splitmaxiters(PetscInt v) { _splitmaxiters = v; }
+    // set communicator options
     void set_nodesperevaluator(PetscInt v) { _nodesperevaluator = v; }
     void set_subproblemsperevaluator(PetscInt v) { _subproblemsperevaluator = v; }
+    void set_totalsubproblems(PetscInt v) { _totalsubproblems = v; }
     void set_nevaluators(PetscInt v) { _nevaluators = v; }
     void set_nevals(PetscInt v) { _nevals = v; }
+    void set_taskspernode(PetscInt v) { _taskspernode = v; }
+
+    // set eigenvalue partitioning options
     void set_nk(PetscInt v) { _nk = v; }
     void set_nb(PetscInt v) { _nb = v; }
     void set_p(PetscInt v) { _p = v; }
     void set_nv(PetscInt v) { _nv = v; }
+    void set_splitmaxiters(PetscInt v) { _splitmaxiters = v; }
     void set_raditers(PetscInt v) { _raditers = v; }
     void set_splittol(PetscReal v) { _splittol = v; }
     void set_radtol(PetscReal v) { _radtol = v; }
     void set_L(PetscReal v) { _L = v; }
     void set_R(PetscReal v) { _R = v; }
+
+    // set save and print options
     void set_terse(bool v) { _terse = v; }
     void set_details(bool v) { _details = v; }
     void set_debug(bool v) { _debug = v; }
@@ -91,26 +99,28 @@ public:
         _save_eigenbasis = v;
          sprintf(_eigenbasis_filename, "%s", filename);
     }
-    void set_totalsubproblems(PetscInt v) { _totalsubproblems = v; }
-    void set_eps_solver_type(PetscInt v) { _eps_solver_type = v; }
-    void set_ksp_solver_type(PetscInt v) { _ksp_solver_type = v; }
     
-    // getters
-    PetscInt nevt() { return _nevt; }
-    PetscInt splitmaxiters() { return _splitmaxiters; }
+    // get communicator options
     PetscInt nodesperevaluator() { return _nodesperevaluator; }
     PetscInt subproblemsperevaluator() { return _subproblemsperevaluator; }
+    PetscInt totalsubproblems() { return _totalsubproblems; }
     PetscInt nevaluators() { return _nevaluators; }
     PetscInt nevals() { return _nevals; }
+    PetscInt taskspernode() { return _taskspernode; }
+
+    // get eigenvalue partitioning options
     PetscInt nk() { return _nk; }
     PetscInt nb() { return _nb; }
     PetscInt p() { return _p; }
     PetscInt nv() { return _nv; }
+    PetscInt splitmaxiters() { return _splitmaxiters; }
     PetscInt raditers() { return _raditers; }
     PetscReal splittol() { return _splittol; }
     PetscReal radtol() { return _radtol; }
     PetscReal L() { return _L; }
     PetscReal R() { return _R; }
+
+    // get save and print options
     bool terse() { return _terse; }
     bool details() { return _details; }
     bool debug() { return _debug; }
@@ -122,9 +132,6 @@ public:
     char* correctness_filename() { return _correctness_filename; }
     char* eigenvalues_filename() { return _eigenvalues_filename; }
     char* eigenbasis_filename() { return _eigenbasis_filename; }
-    PetscInt totalsubproblems() { return _totalsubproblems; }
-    PetscInt eps_solver_type() { return _eps_solver_type; }
-    PetscInt ksp_solver_type() { return _ksp_solver_type; }
 };
 
 struct NodeInfo
@@ -160,24 +167,6 @@ private:
     std::vector<PetscReal> intervals;
     std::vector<PetscReal> residuals;
 
-public:
-
-    eigen_mm();
-    ~eigen_mm();
-
-    int init(Mat &K_in, Mat &M_in, SolverOptions &opt);
-    int solve(Mat *V_out, Vec *lambda_out);
-
-    void exactEigenvalues_square_neumann(int Ne, 
-        std::vector<PetscReal> &lambda, 
-        std::vector<PetscReal> &eta1, 
-        std::vector<PetscReal> &eta2);
-    void exactEigenvalues_cube_neumann(int Ne, 
-        std::vector<PetscReal> &lambda, 
-        std::vector<PetscReal> &eta1, 
-        std::vector<PetscReal> &eta2,
-        std::vector<PetscReal> &eta3);
-
     void findUpperBound();
     void rescaleInterval();
     void formSubproblems();
@@ -205,6 +194,24 @@ public:
     PetscInt computeDev_exact(PetscReal a, PetscBool rl);
     PetscReal computeRadius(Mat &A);
     void countInterval(PetscReal a, PetscReal b, PetscInt *count);
+
+public:
+
+    eigen_mm();
+    ~eigen_mm();
+
+    int init(Mat &K_in, Mat &M_in, SolverOptions &opt);
+    int solve(Mat *V_out, Vec *lambda_out);
+
+    void exactEigenvalues_square_neumann(int Ne, 
+        std::vector<PetscReal> &lambda, 
+        std::vector<PetscReal> &eta1, 
+        std::vector<PetscReal> &eta2);
+    void exactEigenvalues_cube_neumann(int Ne, 
+        std::vector<PetscReal> &lambda, 
+        std::vector<PetscReal> &eta1, 
+        std::vector<PetscReal> &eta2,
+        std::vector<PetscReal> &eta3);
 
 };
 
