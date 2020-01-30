@@ -45,6 +45,27 @@ int eigen_mm::init(Mat &K_in, Mat &M_in, SolverOptions &opts_in)
     M_global = M_in;
     K_global = K_in;
 
+    if(opts.save_operators())
+    {
+        char K_filename[1024];
+        char M_filename[1024];
+
+        sprintf(K_filename, "%s_K", opts.operators_filename());
+        sprintf(M_filename, "%s_M", opts.operators_filename());
+        
+        PetscViewer viewer;
+
+        PetscViewerBinaryOpen(PETSC_COMM_WORLD, K_filename, 
+            FILE_MODE_WRITE, &viewer);
+        MatView(K_global, viewer);
+        PetscViewerDestroy(&viewer);
+
+        PetscViewerBinaryOpen(PETSC_COMM_WORLD, M_filename, 
+            FILE_MODE_WRITE, &viewer);
+        MatView(M_global, viewer);
+        PetscViewerDestroy(&viewer);
+    }
+
     MPI_Barrier(PETSC_COMM_WORLD);
     double end_time = MPI_Wtime();
     double elapsed = end_time - start_time;
