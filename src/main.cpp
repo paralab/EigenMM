@@ -1,3 +1,36 @@
+///////////////////////////////////////////////////////////////////////////////
+//
+// File main.cpp
+//
+// The MIT License
+//
+// Copyright (c) 2006 Division of Applied Mathematics, Brown University (USA),
+// Department of Aeronautics, Imperial College London (UK), and Scientific
+// Computing and Imaging Institute, University of Utah (USA).
+//
+// License for the specific language governing rights and limitations under
+// Permission is hereby granted, free of charge, to any person obtaining a
+// copy of this software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included
+// in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+// OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+// LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+// FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS IN THE SOFTWARE.
+//
+// Description: EigenMM example driver
+//
+///////////////////////////////////////////////////////////////////////////////
+
 #include <eigen_mm.h>
 
 void loadMatsFromFile(Mat *K, Mat *M, const char* operators_path)
@@ -39,30 +72,29 @@ void setupOptions(SolverOptions &options, const char* optionsPath)
     TiXmlHandle docH( &doc );
     TiXmlElement* element = docH.FirstChildElement( "EIGEN_MM" ).FirstChildElement( "OPTIONS" ).Element();
 
-    options.set_nevt(atoi(element->Attribute( "_nevt" )));
-    options.set_splitmaxiters(atoi(element->Attribute( "_splitmaxiters" )));
-    options.set_nodesperevaluator(atoi(element->Attribute( "_nodesperevaluator" )));
-    options.set_subproblemsperevaluator(atoi(element->Attribute( "_subproblemsperevaluator" )));
-    options.set_totalsubproblems(atoi(element->Attribute( "_totalsubproblems" )));
-    options.set_nevaluators(atoi(element->Attribute( "_nevaluators" )));
-    options.set_nevals(atoi(element->Attribute( "_nevals" )));
-    options.set_nk(atoi(element->Attribute( "_nk" )));
-    options.set_nb(atoi(element->Attribute( "_nb" )));
-    options.set_p(atoi(element->Attribute( "_p" )));
-    options.set_nv(atoi(element->Attribute( "_nv" )));
-    options.set_raditers(atoi(element->Attribute( "_raditers" )));
-    options.set_splittol(atof(element->Attribute( "_splittol" )));
-    options.set_radtol(atof(element->Attribute( "_radtol" )));
-    options.set_L(atof(element->Attribute( "_L" )));
-    options.set_R(atof(element->Attribute( "_R" )));
-    options.set_terse(atoi(element->Attribute( "_terse" )));
-    options.set_details(atoi(element->Attribute( "_details" )));
-    options.set_debug(atoi(element->Attribute( "_debug" )));
-    options.set_save_correctness(atoi(element->Attribute( "_save_correctness" )), element->Attribute("_correctness_filename"));
-    options.set_save_eigenvalues(atoi(element->Attribute( "_save_eigenvalues" )), element->Attribute("_eigenvalues_filename"));
-    options.set_save_eigenbasis(atoi(element->Attribute( "_save_eigenbasis" )), element->Attribute("_eigenbasis_filename"));
-    options.set_eps_solver_type(atoi(element->Attribute("_eps_solver_type")));
-    options.set_ksp_solver_type(atoi(element->Attribute("_ksp_solver_type")));
+        options.set_splitmaxiters(atoi(element->Attribute( "_splitmaxiters" )));
+        options.set_nodesperevaluator(atoi(element->Attribute( "_nodesperevaluator" )));
+        options.set_subproblemsperevaluator(atoi(element->Attribute( "_subproblemsperevaluator" )));
+        options.set_totalsubproblems(atoi(element->Attribute( "_totalsubproblems" )));
+        options.set_nevaluators(atoi(element->Attribute( "_nevaluators" )));
+        options.set_taskspernode(atoi(element->Attribute( "_taskspernode" )));
+        options.set_nevals(atoi(element->Attribute( "_nevals" )));
+        options.set_nk(atoi(element->Attribute( "_nk" )));
+        options.set_nb(atoi(element->Attribute( "_nb" )));
+        options.set_p(atoi(element->Attribute( "_p" )));
+        options.set_nv(atoi(element->Attribute( "_nv" )));
+        options.set_raditers(atoi(element->Attribute( "_raditers" )));
+        options.set_splittol(atof(element->Attribute( "_splittol" )));
+        options.set_radtol(atof(element->Attribute( "_radtol" )));
+        options.set_L(atof(element->Attribute( "_L" )));
+        options.set_R(atof(element->Attribute( "_R" )));
+        options.set_terse(atoi(element->Attribute( "_terse" )));
+        options.set_details(atoi(element->Attribute( "_details" )));
+        options.set_debug(atoi(element->Attribute( "_debug" )));
+        options.set_save_correctness(atoi(element->Attribute( "_save_correctness" )), element->Attribute("_correctness_filename"));
+        options.set_save_operators(atoi(element->Attribute( "_save_operators" )), element->Attribute("_operators_filename"));
+        options.set_save_eigenvalues(atoi(element->Attribute( "_save_eigenvalues" )), element->Attribute("_eigenvalues_filename"));
+        options.set_save_eigenbasis(atoi(element->Attribute( "_save_eigenbasis" )), element->Attribute("_eigenbasis_filename"));
 
     MPI_Barrier(PETSC_COMM_WORLD);
 }
