@@ -20,49 +20,7 @@ find_package(MPI REQUIRED)
 include_directories(${MPI_INCLUDE_PATH})
 
 # -----------------------------------------------------------------------
-# PETSc
-
-#Majid
-#set(PETSC_DIR_EigenMM "~/softwares/petsc-3.8.0")
-#set(PETSC_ARCH_EigenMM "arch-linux2-c-debug")
-#set(PETSC_DIR_EigenMM "~/Software/petsc-3.8.4")
-#set(PETSC_ARCH_EigenMM "arch-linux2-c-opt")
-
-#set(PETSC_LIB_EigenMM ${PETSC_DIR_EigenMM}/${PETSC_ARCH_EigenMM}/lib/libpetsc.so)
-#include_directories(
-#        ${PETSC_DIR_EigenMM}/include
-#        ${PETSC_DIR_EigenMM}/${PETSC_ARCH_EigenMM}/include
-#)
-
-# -----------------------------------------------------------------------
-# SLEPc
-
-# paste the SLEPC_DIR address here:
-#set(SLEPC_DIR /home/majidrp/Projects/nektarpp_eigensolver/library/MultiRegions/eigenSolver/slepc-3.8.3)
-
-#set(SLEPC_DIR "~/softwares/slepc-3.8.3")
-#set(SLEPC_DIR "~/Software/slepc-3.8.3")
-#set(SLEPC_LIB ${SLEPC_DIR}/${PETSC_ARCH_EigenMM}/lib/libslepc.so)
-#include_directories(
-#        ${SLEPC_DIR}/include
-#        ${SLEPC_DIR}/${PETSC_ARCH_EigenMM}/include
-#)
-
-# -----------------------------------------------------------------------
 # Main Files
-
-#MESSAGE("\n\ninside eigenmm CMakelists.txt")
-#MESSAGE("PETSC_DIR: ${PETSC_DIR}")
-#MESSAGE("PETSC_INCLUDES: ${PETSC_INCLUDES}")
-#MESSAGE("PETSC_LIBRARIES: ${PETSC_LIBRARIES}")
-#MESSAGE("SLEPC_LIBRARIES: ${SLEPC_LIBRARIES}")
-#MESSAGE("TPDIST: ${TPDIST}")
-#MESSAGE("CMAKE_INSTALL_PREFIX: ${CMAKE_INSTALL_PREFIX}")
-#MESSAGE("EIGENMM_DIR: ${EIGENMM_DIR}")
-#MESSAGE("CMAKE_CURRENT_SOURCE_DIR: ${CMAKE_CURRENT_SOURCE_DIR}")
-#MESSAGE("CMAKE_CURRENT_BINARY_DIR: ${CMAKE_CURRENT_BINARY_DIR}")
-#MESSAGE("CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
-#MESSAGE("CMAKE_BINARY_DIR: ${CMAKE_BINARY_DIR}")
 
 set(EIGENMM_DIR ${CMAKE_CURRENT_SOURCE_DIR})
 set(EIGENMM_INCLUDES ${EIGENMM_DIR}/include)
