@@ -1,9 +1,6 @@
 # EigenMM
 
-This eigensolver uses PETSc and SLEPc. The following variables should be set:\
-**PETSC_DIR\
-PETSC_ARCH\
-SLEPC_DIR**
+This eigensolver uses PETSc and SLEPc.
 
 To solve a generalized eigenvalue problem, PETSc should be installed with mumps.\
 Also, to use the "view" functions, the "x" option should be passed to PETSc.\
