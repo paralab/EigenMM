@@ -1,23 +1,30 @@
-# EigenMM
+# EigenMM + MCompress
 
-This eigensolver uses PETSc and SLEPc.
+EigenMM is a scalable spectrum slicing eigenvalue solver that extends PETSc and SLEPc. MCompress is a hierarchical compression library for compressing the resulting eigenbasis matrices.
 
-To solve a generalized eigenvalue problem, PETSc should be installed with mumps.\
-Also, to use the "view" functions, the "x" option should be passed to PETSc.\
+To solve a generalized eigenvalue problem, PETSc should be installed with mumps, metis, parmetis, and scalapack.\
 To do that, when installing PETSc pass the following parameters:\
-./configure --with-cxx-dialect=C++11 --download-mumps  --with-x
+./configure --with-cxx-dialect=C++11 --download-metis --download-parmetis --download-scalapack --download-mumps
+
+EigenMM also uses TinyXML for reading in an options file.
+
+An example of how to use the full EigenMM + MCompress pipeline can be found in the `experiments` folder.
 
 ---
 
-To see an example, check test_fractional2.cpp in folder src.
+## Installation
+An example install script has been provided named `example_install.sh` that shows the cmake variables that need to be set. EigenMM + MCompress requires installs of PETESc, SLEPc, TinyXML, and Intel MKL. 
 
 ---
 
-To use this solver include the header file **eigen_mm.h**.
+## MCompress Options
+
+- `L`: The partitioning size paramter. Input matrix is partitioned into 2 rows and 2^L columns of blocks.
+- `tol`: The tolerance parameter for rank estimation of partitions.
 
 ---
 
-## Solver Options
+## EigenMM Solver Options
 There are a number of options that can be supplied to EigenMM if the default settings are not sufficient.
 
 ### Communicator Options
