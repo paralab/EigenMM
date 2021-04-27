@@ -1,0 +1,44 @@
+Size of K/M: 3969 by 3969
+Operators path: /uufs/chpc.utah.edu/common/home/u0450449/Fractional/EigenMM/experiments/mcompress/input/square4k
+(init) Elapsed: 0.001230
+finding upper bound
+(findUpperBound) Elapsed: 0.143660, Upper Bound: 92952.541448
+forming subproblems
+(formSubproblems) Elapsed: 0.000154, Total Subproblems: 1
+solving subproblems
+[Node 0]: Solving interval [1.100000, 92952.541448]
+** PETSc DEPRECATION WARNING ** : the option -pc_factor_mat_solver_package is deprecated as of version 3.9 and will be removed in a future release. Please use the option -pc_factor_mat_solver_type instead. (Silence this warning with -options_suppress_deprecated_warnings)
+(solveSubproblem) Evaluator: 0, Subinterval: 0, Elapsed: 46.778792, Number of Eigenpairs: 3968
+(solveSubproblems) Elapsed: 46.778907, Total Eigenpairs Found: 3968
+forming eigenbasis
+(formEigenbasis) Elapsed: 2.545279
+(solve) Elapsed: 49.473166, Eigenvalues found: 3968
+Encoding...
+  Starting layer 0 out of 3
+    [1] Encoded block 0 (1) out of 1. Rank = 695/992 (0.700605). Info = 0, (1985 by 992) -> (695 by 992). Elapsed: 1334.235071 ms
+    [0] Encoded block 0 (0) out of 1. Rank = 696/992 (0.701613). Info = 0, (1984 by 992) -> (696 by 992). Elapsed: 1320.834688 ms
+    [7] Encoded block 0 (7) out of 1. Rank = 733/992 (0.738911). Info = 0, (1985 by 992) -> (733 by 992). Elapsed: 1339.339754 ms
+    [6] Encoded block 0 (6) out of 1. Rank = 732/992 (0.737903). Info = 0, (1984 by 992) -> (732 by 992). Elapsed: 1342.484244 ms
+    [4] Encoded block 0 (4) out of 1. Rank = 867/992 (0.873992). Info = 0, (1984 by 992) -> (867 by 992). Elapsed: 1363.727890 ms
+    [3] Encoded block 0 (3) out of 1. Rank = 856/992 (0.862903). Info = 0, (1985 by 992) -> (856 by 992). Elapsed: 1368.133511 ms
+    [2] Encoded block 0 (2) out of 1. Rank = 856/992 (0.862903). Info = 0, (1984 by 992) -> (856 by 992). Elapsed: 1373.733144 ms
+    [5] Encoded block 0 (5) out of 1. Rank = 867/992 (0.873992). Info = 0, (1985 by 992) -> (867 by 992). Elapsed: 1376.717872 ms
+  Starting layer 1 out of 3
+    [4] Encoded block 0 (4) out of 1. Rank = 757/992 (0.763105). Info = 0, (992 by 1551) -> (757 by 1551). Elapsed: 1140.504655 ms
+    [1] Encoded block 0 (1) out of 1. Rank = 757/992 (0.763105). Info = 0, (992 by 1552) -> (757 by 1552). Elapsed: 1161.587312 ms
+    [5] Encoded block 0 (5) out of 1. Rank = 717/993 (0.722054). Info = 0, (993 by 1551) -> (717 by 1551). Elapsed: 1162.446209 ms
+    [0] Encoded block 0 (0) out of 1. Rank = 716/992 (0.721774). Info = 0, (992 by 1552) -> (716 by 1552). Elapsed: 1173.483156 ms
+    [2] Encoded block 0 (2) out of 1. Rank = 747/992 (0.753024). Info = 0, (992 by 1599) -> (747 by 1599). Elapsed: 1207.540116 ms
+    [7] Encoded block 0 (7) out of 1. Rank = 748/993 (0.753273). Info = 0, (993 by 1600) -> (748 by 1600). Elapsed: 1223.902895 ms
+    [3] Encoded block 0 (3) out of 1. Rank = 879/992 (0.886089). Info = 0, (992 by 1599) -> (879 by 1599). Elapsed: 1237.498358 ms
+    [6] Encoded block 0 (6) out of 1. Rank = 877/992 (0.884073). Info = 0, (992 by 1600) -> (877 by 1600). Elapsed: 1256.266664 ms
+  Starting layer 2 out of 3
+    [1] Encoded block 0 (1) out of 1. Rank = 496/496 (1.000000). Info = 0, (496 by 1463) -> (496 by 1463). Elapsed: 214.545069 ms
+    [6] Encoded block 0 (6) out of 1. Rank = 496/496 (1.000000). Info = 0, (496 by 1465) -> (496 by 1465). Elapsed: 218.254830 ms
+    [0] Encoded block 0 (0) out of 1. Rank = 496/496 (1.000000). Info = 0, (496 by 1463) -> (496 by 1463). Elapsed: 225.910725 ms
+    [7] Encoded block 0 (7) out of 1. Rank = 497/497 (1.000000). Info = 0, (497 by 1465) -> (497 by 1465). Elapsed: 227.213966 ms
+    [3] Encoded block 0 (3) out of 1. Rank = 496/496 (1.000000). Info = 0, (496 by 1636) -> (496 by 1636). Elapsed: 257.350219 ms
+    [5] Encoded block 0 (5) out of 1. Rank = 496/496 (1.000000). Info = 0, (496 by 1634) -> (496 by 1634). Elapsed: 260.103956 ms
+    [2] Encoded block 0 (2) out of 1. Rank = 496/496 (1.000000). Info = 0, (496 by 1636) -> (496 by 1636). Elapsed: 260.424981 ms
+    [4] Encoded block 0 (4) out of 1. Rank = 496/496 (1.000000). Info = 0, (496 by 1634) -> (496 by 1634). Elapsed: 260.645241 ms
+compression ratio = 78.7228% elapsed = 3903.741918 ms
