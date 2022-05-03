@@ -1,68 +1,42 @@
 cmake_minimum_required(VERSION 3.04)
-project(EigenMMAndMCompress)
+#project(EigenMM)
 
 set(CMAKE_CXX_STANDARD 11)
 
+# Set up RPATH
+SET(CMAKE_SKIP_BUILD_RPATH  FALSE)
+SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+SET(CMAKE_INSTALL_NAME_DIR "${CMAKE_INSTALL_PREFIX}/${LIB_DIR}")
+LIST(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES
+        "${CMAKE_INSTALL_PREFIX}/${LIB_DIR}" isSystemDir)
+IF("${isSystemDir}" STREQUAL "-1")
+    SET(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/${LIB_DIR}")
+ENDIF("${isSystemDir}" STREQUAL "-1")
+
 # -----------------------------------------------------------------------
 # MPI
+
 find_package(MPI REQUIRED)
 include_directories(${MPI_INCLUDE_PATH})
-# -----------------------------------------------------------------------
-
-# PETSc
-set(PETSC_ROOT "" CACHE STRING "Path to PETSc root directory.")
-set(PETSC_ARCH "arch-linux2-c-opt" CACHE STRING "PETSc architecture.")
-set(PETSC_LIB ${PETSC_ROOT}/${PETSC_ARCH}/lib/libpetsc.so)
-include_directories(
-        ${PETSC_ROOT}/include
-        ${PETSC_ROOT}/${PETSC_ARCH}/include
-)
-# -----------------------------------------------------------------------
-
-# SLEPc
-set(SLEPC_ROOT  "" CACHE STRING "Path to SLEPc root directory.")
-set(SLEPC_LIB ${SLEPC_ROOT}/${PETSC_ARCH}/lib/libslepc.so)
-include_directories(
-        ${SLEPC_ROOT}/include
-        ${SLEPC_ROOT}/${PETSC_ARCH}/include
-)
-# -----------------------------------------------------------------------
 
 # -----------------------------------------------------------------------
-# TinyXML
-set(TINYXML_INCLUDE "" CACHE STRING "Path to TinyXML include directory.")
-set(TINYXML_LIB "" CACHE STRING "Path to TinyXML library.")
-include_directories(${TINYXML_INCLUDE})
-# -----------------------------------------------------------------------
+# Main Files
 
-# -----------------------------------------------------------------------
-# MKL
-set(MKL_INCLUDE_DIRS "" CACHE STRING "Path to MKL include directory.")
-set(MKL_LIBRARIES "" CACHE STRING "Path to MKL libraries directory.")
-include_directories(${MKL_INCLUDE_DIRS})
-link_directories(${MKL_LIBRARIES})
-# -----------------------------------------------------------------------
+set(EIGENMM_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+set(EIGENMM_INCLUDES ${EIGENMM_DIR}/include/eigenmm)
+INCLUDE_DIRECTORIES(${PETSC_INCLUDES})
+INCLUDE_DIRECTORIES(${EIGENMM_INCLUDES})
 
-# -----------------------------------------------------------------------
-# EigenMM
-include_directories(include/eigenmm/)
-add_library(EigenMM SHARED src/eigenmm/eigen_mm.cpp)
-target_link_libraries(EigenMM ${MPI_LIBRARIES} ${TINYXML_LIB} ${SLEPC_LIB} ${PETSC_LIB})
-# -----------------------------------------------------------------------
+set(EIGENMM_SOURCE_FILES ${EIGENMM_DIR}/src/eigenmm/eigen_mm.cpp)
+set(EIGENMM_HEADER_FILES ${EIGENMM_DIR}/include/eigenmm/eigen_mm.h)
 
-# -----------------------------------------------------------------------
-# MCompress
-include_directories(include/mcompress/)
-# -----------------------------------------------------------------------
+add_library(eigenmm SHARED ${EIGENMM_SOURCE_FILES})
+target_link_libraries(eigenmm ${MPI_LIBRARIES} ${SLEPC_LIBRARIES} ${PETSC_LIBRARIES})
 
-add_executable(EigenMMSolve src/eigenmm/eigen_mm_solve.cpp include/eigenmm/eigen_mm.h)
-target_link_libraries(EigenMMSolve ${MPI_LIBRARIES} ${TINYXML_LIB} ${SLEPC_LIB} ${PETSC_LIB} EigenMM)
+install(FILES ${EIGENMM_HEADER_FILES} DESTINATION ${TPDIST}/include)
+install(TARGETS eigenmm DESTINATION ${TPDIST}/lib)
 
-add_executable(MCompressEncode src/mcompress/encode.cpp include/mcompress/mcompress.hpp)
-target_link_libraries(MCompressEncode ${MPI_LIBRARIES} mkl_intel_lp64 mkl_sequential mkl_core)
-
-add_executable(MCompressApply src/mcompress/apply.cpp include/mcompress/mcompress.hpp)
-target_link_libraries(MCompressApply ${MPI_LIBRARIES} mkl_intel_lp64 mkl_sequential mkl_core)
-
-add_executable(MCompressDenseMatvec src/mcompress/dense_matvec.cpp include/mcompress/mcompress.hpp)
-target_link_libraries(MCompressDenseMatvec ${MPI_LIBRARIES} ${PETSC_LIB} mkl_intel_lp64 mkl_sequential mkl_core)
+# If this cmake file is called inside Nektar++, "TPDIST" won't be NULL.
+IF(${TPDIST})
+    configure_file(${EIGENMM_HEADER_FILES} ${TPDIST}/include)
+ENDIF(${TPDIST})
